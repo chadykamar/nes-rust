@@ -390,11 +390,72 @@ impl Cpu {
     /// BIT - Bit Test
     fn bit(&mut self, addr: u16) {
         let m = self.read(addr);
+        self.p.set_v((m >> 6) & 1 == 1);
+        let a = self.a;
+        self.check_zero(m & a);
+        self.check_negative(m);
+    }
+
+    /// BMI - Branch if Minus
+    fn bmi(&mut self, addr: u16) {
+        if self.p.get_n() {
+            self.cycles += 1;
+            if Cpu::check_same_page(self.pc, addr) {
+                self.cycles += 1;
+            }
+            self.pc = addr;
+        }
+    }
+
+    /// BNE - Branch if Not Equal 
+    fn bne(&mut self, addr: u16) {
+        if !self.p.get_z() {
+            self.cycles += 1;
+            if Cpu::check_same_page(self.pc, addr) {
+                self.cycles += 1;
+            }
+            self.pc = addr;
+        }
+    }
+
+    /// BPL - Branch if Positive
+    fn bpl(&mut self, addr: u16) {
+        if !self.p.get_n() {
+            self.cycles += 1;
+            if Cpu::check_same_page(self.pc, addr) {
+                self.cycles += 1;
+    }
+            self.pc = addr;
+        }
+    }
+
+    /// BRK - Force Interrupt
+    fn brk(&mut self) {
+        let pc = self.pc;
+        self.pc = self.read16(IRQ_BRK_VECTOR);
+        self.push16(pc);
+        self.php();
+        self.sei();
     }
 
     // PHP - Push Processor Status
     fn php(&mut self) {
         let p: u8 = self.p.bit_range(7, 0);
         self.push(p | 0x10);
+    }
+
+    /// SEC - Set Carry Flag
+    fn sec(&mut self) {
+        self.p.set_c(true);
+    }
+
+    /// SED - Set Decimal Flag
+    fn sed(&mut self) {
+        self.p.set_d(true);
+    }
+
+    /// SEI - Set Interrupt Disable
+    fn sei(&mut self) {
+        self.p.set_i(true);
     }
 }
