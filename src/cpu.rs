@@ -155,6 +155,29 @@ impl Cpu {
         }
     }
 
+    // Util
+
+    // Sets the zero flag if the argument is zero
+    fn check_zero(&mut self, val: u8) {
+        self.p.set_z(val == 0);
+    }
+
+    // Sets the negative flag if the argument is negative (high bit is set)
+    fn check_negative(&mut self, val: u8) {
+        self.p.set_n(val & 0x80 != 0);
+    }
+
+    // Sets the negative flag if the argument is negative (high bit is set)
+    // and the zero flag if the argument is zero
+    fn check_negative_zero(&mut self, val: u8) {
+        self.check_zero(val);
+        self.check_negative(val);
+    }
+
+    fn check_same_page(addr1: u16, addr2: u16) -> bool {
+        addr1 & 0xFF00 != addr2 & 0xFF00
+    }
+
     // Stack
 
     fn push(&mut self, val: u8) {
@@ -263,11 +286,6 @@ impl Cpu {
         );
     }
 
-    fn resolve_addressing(mode: AddressingMode) -> u16 {
-        // match mode {}
-        return 0;
-    }
-
     fn decode(&self, opcode: u8) -> Box<Fn()> {
         Box::new(move || println!("No!"))
     }
@@ -292,7 +310,36 @@ impl Cpu {
 
     // Operations
 
-    fn adc(&self, addr: u16) {
+    /// ADC - Add with Carry
+    fn adc(&mut self, addr: u16) {
+        let a = self.a;
+        let m = self.read(addr);
+        let c = self.p.get_c() as u8;
+
+        let result = a + m + c;
+
+        self.a = result;
+        self.check_negative_zero(result);
+
+        // Check if result overflows bit 7
+        self.p.set_c(a as u16 + m as u16 + c as u16 > 0xFF);
+
+        // Check if sign is incorrect
+        self.p
+            .set_v((a ^ m) & 0x80 == 0 && (a ^ self.a) & 0x80 != 0);
+    }
+
+    /// AND - Logical AND
+    fn and(&mut self, addr: u16) {
+        self.a &= self.read(addr);
+        let a = self.a;
+        self.check_negative_zero(a);
+    }
+
+    // ASL - Arithmetic Shift Left (accumulator)
+    fn asl_a(&mut self) {
+        self.p.set_c((self.a >> 7) & 1 == 1);
+		self.a <<= 1;
         let a = self.a;
         let m = self.read(addr);
     }
