@@ -339,8 +339,56 @@ impl Cpu {
     // ASL - Arithmetic Shift Left (accumulator)
     fn asl_a(&mut self) {
         self.p.set_c((self.a >> 7) & 1 == 1);
-		self.a <<= 1;
+        self.a <<= 1;
         let a = self.a;
+        self.check_negative_zero(a);
+    }
+
+    // ASL - Arithmetic Shift Left
+    fn asl(&mut self, addr: u16) {
+        let m = self.read(addr);
+        self.p.set_c((m >> 7) & 1 == 1);
+        self.write(addr, m << 1);
+        self.check_negative_zero(m << 1);
+    }
+
+    // TODO Refactor branch ops
+
+    /// BCC - Branch if Carry Clear
+    fn bcc(&mut self, addr: u16) {
+        if !self.p.get_c() {
+            self.cycles += 1;
+            if Cpu::check_same_page(self.pc, addr) {
+                self.cycles += 1;
+            }
+            self.pc = addr;
+        }
+    }
+
+    /// BCS - Branch if Carry Set
+    fn bcs(&mut self, addr: u16) {
+        if self.p.get_c() {
+            self.cycles += 1;
+            if Cpu::check_same_page(self.pc, addr) {
+                self.cycles += 1;
+            }
+            self.pc = addr;
+        }
+    }
+
+    /// BEQ - Branch if Equal
+    fn beq(&mut self, addr: u16) {
+        if self.p.get_z() {
+            self.cycles += 1;
+            if Cpu::check_same_page(self.pc, addr) {
+                self.cycles += 1;
+            }
+            self.pc = addr;
+        }
+    }
+
+    /// BIT - Bit Test
+    fn bit(&mut self, addr: u16) {
         let m = self.read(addr);
     }
 
