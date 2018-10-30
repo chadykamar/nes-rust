@@ -424,7 +424,7 @@ impl Cpu {
             self.cycles += 1;
             if Cpu::check_same_page(self.pc, addr) {
                 self.cycles += 1;
-    }
+            }
             self.pc = addr;
         }
     }
@@ -438,7 +438,60 @@ impl Cpu {
         self.sei();
     }
 
-    // PHP - Push Processor Status
+    /// BVC - Branch if Overflow Clear
+    fn bvc(&mut self, addr: u16) {
+        if !self.p.get_v() {
+            self.cycles += 1;
+            if Cpu::check_same_page(self.pc, addr) {
+                self.cycles += 1;
+            }
+            self.pc = addr;
+        }
+    }
+
+    /// BVS - Branch if Overflow Set
+    fn bvs(&mut self, addr: u16) {
+        if self.p.get_v() {
+            self.cycles += 1;
+            if Cpu::check_same_page(self.pc, addr) {
+                self.cycles += 1;
+            }
+            self.pc = addr;
+        }
+    }
+
+    /// CLC - Clear Carry Flag
+    fn clc(&mut self) {
+        self.p.set_c(false);
+    }
+
+    /// CLD - Clear Decimal Mode
+    fn cld(&mut self) {
+        self.p.set_d(false);
+    }
+
+    /// CLI - Clear Interrupt Disable
+    fn cli(&mut self) {
+        self.p.set_i(false);
+    }
+
+    /// CLV - Clear Overflow Flag
+    fn clv(&mut self) {
+        self.p.set_v(false);
+    }
+
+    /// Comparison, used for: 
+    /// * CMP - Compare
+    /// * CPX - Compare X Register
+    /// * CPY - Compare Y register
+    fn compare(&mut self, addr: u16, register_val: u8) {
+        let m = self.read(addr);
+        self.check_negative_zero(register_val - m);
+        self.p.set_c(register_val >= m);
+	}
+
+
+    /// PHP - Push Processor Status
     fn php(&mut self) {
         let p: u8 = self.p.bit_range(7, 0);
         self.push(p | 0x10);
