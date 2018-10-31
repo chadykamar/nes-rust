@@ -249,8 +249,7 @@ impl Cpu {
 
         let opcode = self.read(self.pc);
         let cycles = INSTRUCTION_CYCLES[opcode as usize];
-        let op = self.decode(opcode);
-        op();
+        self.exec(opcode);
         self.pc += 1;
         self.cycles += cycles;
     }
@@ -286,8 +285,14 @@ impl Cpu {
         );
     }
 
-    fn decode(&self, opcode: u8) -> Box<Fn()> {
-        Box::new(move || println!("No!"))
+    fn exec(&mut self, opcode: u8) {
+        match opcode {
+            0x69 => {
+                let addr = self.immediate();
+                self.adc(addr);
+            }
+            _ => {}
+        }
     }
 
     fn nmi(&mut self) {
@@ -407,7 +412,7 @@ impl Cpu {
         }
     }
 
-    /// BNE - Branch if Not Equal 
+    /// BNE - Branch if Not Equal
     fn bne(&mut self, addr: u16) {
         if !self.p.get_z() {
             self.cycles += 1;
@@ -480,7 +485,7 @@ impl Cpu {
         self.p.set_v(false);
     }
 
-    /// Comparison, used for: 
+    /// Comparison, used for:
     /// * CMP - Compare
     /// * CPX - Compare X Register
     /// * CPY - Compare Y register
@@ -488,14 +493,200 @@ impl Cpu {
         let m = self.read(addr);
         self.check_negative_zero(register_val - m);
         self.p.set_c(register_val >= m);
-	}
+    }
 
+    /// DEC - Decrement Memory
+    fn dec(&mut self, addr: u16) {
+        let m = self.read(addr);
+        self.write(addr, m - 1);
+        self.check_negative_zero(m - 1);
+    }
+
+    /// DEX - Decrement X Register
+    fn dex(&mut self) {
+        self.x -= 1;
+        let x = self.x;
+        self.check_negative_zero(x);
+    }
+
+    /// DEY - Decrement Y Register
+    fn dey(&mut self) {
+        self.y -= 1;
+        let y = self.y;
+        self.check_negative_zero(y);
+    }
+
+    /// EOR - Exclusive OR
+    fn eor(&mut self, addr: u16) {
+        self.a ^= self.read(addr);
+        let a = self.a;
+        self.check_negative_zero(a);
+    }
+
+    /// INC - Increment Memory
+    fn inc(&mut self, addr: u16) {
+        let m = self.read(addr);
+        self.write(addr, m + 1);
+        self.check_negative_zero(m + 1);
+    } 
+
+    /// INX - Increment X Register
+    fn inx(&mut self) {
+        self.x += 1;
+        let x = self.x;
+        self.check_negative_zero(x);
+    }
+
+    /// INY - Increment Y Register
+    fn iny(&mut self) {
+        self.y += 1;
+        let y = self.y;
+        self.check_negative_zero(y);
+    }
+
+    /// JMP - Jump
+    fn jmp(&mut self, addr: u16) {
+        self.pc = addr;
+    }
+
+    /// JSR - Jump to Subroutine
+    fn jsr(&mut self, addr: u16) {
+        let pc = self.pc;
+        self.push16(pc - 1);
+    }
+
+    /// LDA - Load Accumulator
+    fn lda(&mut self, addr: u16) {
+        self.a = self.read(addr);
+        let a = self.a;
+        self.check_negative_zero(a);
+    }
+
+    /// LDX - Load X Register
+    fn ldx(&mut self, addr: u16) {
+        self.x = self.read(addr);
+        let x = self.x;
+        self.check_negative_zero(x);
+    }
+
+    /// LDY - Load Y Register
+    fn ldy(&mut self, addr: u16) {
+        self.y = self.read(addr);
+        let y = self.y;
+        self.check_negative_zero(y);
+    }
+
+    /// LSR - Logical Shift Right (Accumulator)
+    fn lsr_a(&mut self) {
+        self.p.set_c(self.a & 1 == 1);
+        self.a >>= 1;
+        let a = self.a;
+        self.check_negative_zero(a);
+
+    }
+
+    /// LSR - Logical Shift Right
+    fn lsr(&mut self, addr: u16) {
+        let m = self.read(addr);
+        self.p.set_c(m & 1 == 1);
+        self.write(addr, m >> 1);
+        self.check_negative_zero(m >> 1);
+    }
+
+    /// ORA - Logical Inclusive OR
+    fn ora(&mut self, addr: u16) {
+        self.a |= self.read(addr);
+        let a = self.a;
+        self.check_negative_zero(a);
+    }
+
+    /// PHA - Push Accumulator
+    fn pha(&mut self) {
+        let a = self.a;
+        self.push(a);
+    } 
 
     /// PHP - Push Processor Status
     fn php(&mut self) {
         let p: u8 = self.p.bit_range(7, 0);
         self.push(p | 0x10);
     }
+
+    /// PLA - Pull Accumulator
+    fn pla(&mut self) {
+        self.a = self.pull();
+        let a = self.a;
+        self.check_negative_zero(a);
+    }
+
+    /// PLP - Pull Processor Status
+    fn plp(&mut self) {
+        let p = self.pull() & 0xEF | 0x20;
+        self.p.set_bit_range(7, 0, p);
+    }
+
+    /// ROL - Rotate Left (Accumulator)
+    fn rol_a(&mut self) {
+        let c = self.p.get_c() as u8;
+        self.p.set_c(self.a >> 7 & 1 == 1);
+        self.a = (self.a << 1) | c;
+        let a = self.a;
+        self.check_negative_zero(a);
+    }
+
+    /// ROL - Rotate Left
+    fn rol(&mut self, addr) {
+        let c = self.p.get_c() as u8;
+        let m = self.read(addr);
+        self.p.set_c((m >> 7) & 1 == 1);
+        self.write(addr, (m << 1) | c);
+        self.check_negative_zero((m << 1) | c);
+    }
+
+    /// ROR - Rotate Right (Accumulator)
+    fn ror_a(&mut self) {
+       let c = self.p.get_c() as u8;
+       self.p.set_c(self.a & 1 == 1);
+       self.a = (self.a >> 1) | (c << 7);
+       let a = self.a;
+       self.check_negative_zero(a); 
+    }
+
+    /// ROR - Rotate Right
+    fn ror(&mut self, addr: u16) {
+        let c = self.p.get_c() as u8;
+        let m = self.read(addr);
+        self.p.set_c(m & 1 == 1);
+        self.write(addr, (m >> 1) | (c << 7));
+        self.check_negative_zero((m >> 1) | (c << 7));
+    }
+
+    /// RTI - Return from Interrupt
+    fn rti(&mut self) {
+        self.p.set_bit_range(7, 0, self.pull() & 0xEF | 0x20);
+        self.pc = self.pull16();
+    }
+
+    /// RTS - Return from Subroutine
+    fn rts(&mut self) {
+        self.pc = self.pull16() + 1;
+    }
+
+    /// SBC - Subtract with Carry
+    fn sbc(&mut self, addr: u16) {
+        let a = self.a;
+        let m = self.read(addr);
+        let c = self.p.get_c() as u8;
+        let res = a - m - (1 - c);
+        self.a = res;
+        self.check_negative_zero(res);
+        
+        self.p.set_c(a as u16 - m as u16 - (1 - c) as u16 >= 0);
+
+        self.p.set_v((a^m)&0x80 != 0 && (a^self.a)&0x80 != 0);
+        
+    }
+
 
     /// SEC - Set Carry Flag
     fn sec(&mut self) {
