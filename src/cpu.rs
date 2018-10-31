@@ -1,4 +1,5 @@
 use bitfield::{Bit, BitRange};
+use mapper::Mapper;
 
 /// Stack offset
 const STACK: u16 = 0x100;
@@ -119,11 +120,12 @@ pub struct Cpu {
     x: u8,
     y: u8,
     p: ProcessorStatus, // The status register is made up of 5 flags and 3 unused bits
+    mapper: Mapper
 }
 
 impl Cpu {
-    pub fn new() -> Cpu {
-        let mut cpu = Cpu {
+    pub fn new(mapper: Mapper) -> Cpu {
+        Cpu {
             ram: [0; RAM_SIZE],
             cycles: 0,
             stall: 0,
@@ -134,9 +136,8 @@ impl Cpu {
             x: 0,
             y: 0,
             p: ProcessorStatus(0x24),
-        };
-        cpu.reset();
-        cpu
+            mapper: mapper
+        }
     }
 
     pub fn reset(&mut self) {
@@ -208,7 +209,9 @@ impl Cpu {
     fn read(&self, addr: u16) -> u8 {
         // TODO match
         if addr < 0x2000 {
-            self.ram[(addr & 0x7FF) as usize]
+            self.ram[(addr % 0x0800) as usize]
+        } else if addr >= 0x6000 {
+            self.mapper.read(addr)
         } else {
             0
         }
@@ -230,12 +233,40 @@ impl Cpu {
     fn write(&mut self, addr: u16, val: u8) {
         if addr < 0x2000 {
             self.ram[(addr & 0x7FF) as usize] = val;
+        } else if addr >= 0x6000 {
+            self.mapper.write(addr, val);
         }
     }
+
+    // fn resolve_addressing(mode_no: usize) -> AddressingMode {
+    //     match mode_no {
+    //        1 => AddressingMode::Absolute, 
+    //        2 => AddressingMode::AbsoluteX,
+    //        3 => AddressingMode::AbsoluteY,
+    //        4 => AddressingMode::Accumulator,
+    //        5 => AddressingMode::Immediate,
+    //        6 => AddressingMode::Implied,
+    //        7 => AddressingMode::IndexedIndirect,
+
+    //         AbsoluteX = 2,
+    //         AbsoluteY = 3,
+    //         Accumulator = 4,
+    //         Immediate = 5,
+    //         Implied = 6,
+    //         IndexedIndirect = 7,
+    //         Indirect = 8,
+    //         IndirectIndexed = 9,
+    //         Relative = 10,
+    //         ZeroPage = 11,
+    //         ZeroPageX = 12,
+    //         ZeroPageY = 13,
+    //     }
+    // }
 
     pub fn step(&mut self) -> isize {
         if self.stall > 0 {
             self.stall -= 1;
+            return 1;
         }
 
         self.trace();
@@ -243,17 +274,25 @@ impl Cpu {
         match self.interrupt {
             Interrupt::IRQ => self.irq(),
             Interrupt::NMI => self.nmi(),
-            Interrupt::Reset => self.reset(),
-            Interrupt::None => {}
+            Interrupt::None => {},
+            Interrupt::Reset => {}
         }
+        self.interrupt = Interrupt::None;
+
+        let cy = self.cycles;
+
+        // FIXME problme is here, order is wrong, can't get address with wrong pc
 
         let opcode = self.read(self.pc);
         let cycles = INSTRUCTION_CYCLES[opcode as usize];
-        self.exec(opcode);
+        let mode = (INSTRUCTION_MODES[opcode as usize];
+
         self.pc += INSTRUCTION_SIZES[opcode as usize] as u16;
         self.cycles += cycles;
+        self.exec(opcode);
+        
 
-        return (self.cycles - cycles) as isize;
+        return (self.cycles - cy) as isize;
     }
 
     fn trace(&self) {
@@ -271,7 +310,7 @@ impl Cpu {
         }
         let p: u8 = self.p.bit_range(7, 0);
         println!(
-            "{:4X}  {} {} {}  {} {:28} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3}\n",
+            "{:#X}  {} {} {}  {} {:28} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3}\n",
             self.pc,
             first_byte,
             second_byte,
