@@ -5,3 +5,8 @@ authors = ["Chady Kamar <chady.kamar@gmail.com>"]
 
 [dependencies]
 bitfield = "0.13.1"
+log4rs = "0.8.1"
+log = "0.4.6"
+
+[profile.dev]
+overflow-checks = false

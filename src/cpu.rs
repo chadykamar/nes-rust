@@ -1,4 +1,4 @@
-use bitfield::{Bit, BitRange};
+use bitfield::BitRange;
 use mapper::Mapper;
 
 /// Stack offset
@@ -12,22 +12,6 @@ const IRQ_BRK_VECTOR: u16 = 0xFFFE;
 
 /// Ram Size
 const RAM_SIZE: usize = 0x800;
-
-enum AddressingMode {
-    Absolute = 1,
-    AbsoluteX = 2,
-    AbsoluteY = 3,
-    Accumulator = 4,
-    Immediate = 5,
-    Implied = 6,
-    IndexedIndirect = 7,
-    Indirect = 8,
-    IndirectIndexed = 9,
-    Relative = 10,
-    ZeroPage = 11,
-    ZeroPageX = 12,
-    ZeroPageY = 13,
-}
 
 /// Instruction mode corresponding to the variants of the AddressingMode enum
 const INSTRUCTION_MODES: [usize; 256] = [
@@ -91,7 +75,6 @@ const INSTRUCTION_NAMES: [&str; 256] = [
 enum Interrupt {
     IRQ,
     NMI,
-    Reset,
     None,
 }
 
@@ -120,7 +103,7 @@ pub struct Cpu {
     x: u8,
     y: u8,
     p: ProcessorStatus, // The status register is made up of 5 flags and 3 unused bits
-    mapper: Mapper
+    mapper: Mapper,
 }
 
 impl Cpu {
@@ -136,7 +119,7 @@ impl Cpu {
             x: 0,
             y: 0,
             p: ProcessorStatus(0x24),
-            mapper: mapper
+            mapper: mapper,
         }
     }
 
@@ -238,30 +221,24 @@ impl Cpu {
         }
     }
 
-    // fn resolve_addressing(mode_no: usize) -> AddressingMode {
-    //     match mode_no {
-    //        1 => AddressingMode::Absolute, 
-    //        2 => AddressingMode::AbsoluteX,
-    //        3 => AddressingMode::AbsoluteY,
-    //        4 => AddressingMode::Accumulator,
-    //        5 => AddressingMode::Immediate,
-    //        6 => AddressingMode::Implied,
-    //        7 => AddressingMode::IndexedIndirect,
-
-    //         AbsoluteX = 2,
-    //         AbsoluteY = 3,
-    //         Accumulator = 4,
-    //         Immediate = 5,
-    //         Implied = 6,
-    //         IndexedIndirect = 7,
-    //         Indirect = 8,
-    //         IndirectIndexed = 9,
-    //         Relative = 10,
-    //         ZeroPage = 11,
-    //         ZeroPageX = 12,
-    //         ZeroPageY = 13,
-    //     }
-    // }
+    fn resolve_address(&mut self, mode_no: usize) -> Option<u16> {
+        match mode_no {
+            1 => Some(self.absolute()),
+            2 => Some(self.absolute_x()),
+            3 => Some(self.absolute_y()),
+            4 => None,
+            5 => Some(self.immediate()),
+            6 => None,
+            7 => Some(self.indexed_indirect()),
+            8 => Some(self.indirect()),
+            9 => Some(self.indirect_indexed()),
+            10 => Some(self.relative()),
+            11 => Some(self.zero_page()),
+            12 => Some(self.zero_page_x()),
+            13 => Some(self.zero_page_y()),
+            _ => None,
+        }
+    }
 
     pub fn step(&mut self) -> isize {
         if self.stall > 0 {
@@ -274,8 +251,7 @@ impl Cpu {
         match self.interrupt {
             Interrupt::IRQ => self.irq(),
             Interrupt::NMI => self.nmi(),
-            Interrupt::None => {},
-            Interrupt::Reset => {}
+            Interrupt::None => {}
         }
         self.interrupt = Interrupt::None;
 
@@ -285,12 +261,14 @@ impl Cpu {
 
         let opcode = self.read(self.pc);
         let cycles = INSTRUCTION_CYCLES[opcode as usize];
-        let mode = (INSTRUCTION_MODES[opcode as usize];
+        let mode_no = INSTRUCTION_MODES[opcode as usize];
+
+        let addressing_mode = self.resolve_address(mode_no);
 
         self.pc += INSTRUCTION_SIZES[opcode as usize] as u16;
         self.cycles += cycles;
-        self.exec(opcode);
-        
+
+        self.exec(opcode, addressing_mode);
 
         return (self.cycles - cy) as isize;
     }
@@ -309,7 +287,7 @@ impl Cpu {
             third_byte = String::from("  ");
         }
         let p: u8 = self.p.bit_range(7, 0);
-        println!(
+        trace!(
             "{:#X}  {} {} {}  {} {:28} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3}\n",
             self.pc,
             first_byte,
@@ -387,503 +365,205 @@ impl Cpu {
         (self.read(self.pc + 1) + self.y) as u16 & 0xFF
     }
 
-    fn exec(&mut self, opcode: u8) {
+    fn exec(&mut self, opcode: u8, addr: Option<u16>) {
         match opcode {
-            // ADC
-            0x69 => {
-                let addr = self.immediate();
-                self.adc(addr);
-            }
-            0x65 => {
-                let addr = self.zero_page();
-                self.adc(addr);
-            }
-            0x75 => {
-                let addr = self.zero_page_x();
-                self.adc(addr)
-            }
-            0x6D => {
-                let addr = self.absolute();
-                self.adc(addr)
-            }
-            0x7D => {
-                let addr = self.absolute_x();
-                self.adc(addr)
-            }
-            0x79 => {
-                let addr = self.absolute_y();
-                self.adc(addr)
-            }
-            0x61 => {
-                let addr = self.indexed_indirect();
-                self.adc(addr)
-            }
-            0x71 => {
-                let addr = self.indirect_indexed();
-                self.adc(addr)
-            }
-            // SBC
-            0xE9 => {
-                let addr = self.immediate();
-                self.sbc(addr);
-            }
-            0xE5 => {
-                let addr = self.zero_page();
-                self.sbc(addr);
-            }
-            0xF5 => {
-                let addr = self.zero_page_x();
-                self.sbc(addr)
-            }
-            0xED => {
-                let addr = self.absolute();
-                self.sbc(addr)
-            }
-            0xFD => {
-                let addr = self.absolute_x();
-                self.sbc(addr)
-            }
-            0xF9 => {
-                let addr = self.absolute_y();
-                self.sbc(addr)
-            }
-            0xE1 => {
-                let addr = self.indexed_indirect();
-                self.sbc(addr)
-            }
-            0xF1 => {
-                let addr = self.indirect_indexed();
-                self.sbc(addr)
-            }
-            // LDA
-            0xa1 => {
-                let addr = self.indexed_indirect();
-                self.lda(addr)
-            }
-            0xa5 => {
-                let addr = self.zero_page();
-                self.lda(addr)
-            }
-            0xa9 => {
-                let addr = self.immediate();
-                self.lda(addr)
-            }
-            0xad => {
-                let addr = self.absolute();
-                self.lda(addr)
-            }
-            0xb1 => {
-                let addr = self.indirect_indexed();
-                self.lda(addr)
-            }
-            0xb5 => {
-                let addr = self.zero_page_x();
-                self.lda(addr)
-            }
-            0xb9 => {
-                let addr = self.absolute_y();
-                self.lda(addr)
-            }
-            0xbd => {
-                let addr = self.absolute_x();
-                self.lda(addr)
-            }
-            // LDX
-            0xa2 => {
-                let addr = self.immediate();
-                self.ldx(addr)
-            }
-            0xa6 => {
-                let addr = self.zero_page();
-                self.ldx(addr)
-            }
-            0xb6 => {
-                let addr = self.zero_page_y();
-                self.ldx(addr)
-            }
-            0xae => {
-                let addr = self.absolute();
-                self.ldx(addr)
-            }
-            0xbe => {
-                let addr = self.absolute_y();
-                self.ldx(addr)
-            }
-            // LDY
-            0xa0 => {
-                let addr = self.immediate();
-                self.ldy(addr)
-            }
-            0xa4 => {
-                let addr = self.zero_page();
-                self.ldy(addr)
-            }
-            0xb4 => {
-                let addr = self.zero_page_x();
-                self.ldy(addr)
-            }
-            0xac => {
-                let addr = self.absolute();
-                self.ldy(addr)
-            }
-            0xbc => {
-                let addr = self.absolute_x();
-                self.ldy(addr)
-            }
+            0x69 => self.adc(addr.unwrap()),
+            0x65 => self.adc(addr.unwrap()),
+            0x75 => self.adc(addr.unwrap()),
+            0x6D => self.adc(addr.unwrap()),
+            0x7D => self.adc(addr.unwrap()),
+            0x79 => self.adc(addr.unwrap()),
+            0x61 => self.adc(addr.unwrap()),
+            0x71 => self.adc(addr.unwrap()),
 
-            // Stores
-            0x85 => {
-                let addr = self.zero_page();
-                self.sta(addr)
-            }
-            0x95 => {
-                let addr = self.zero_page_x();
-                self.sta(addr)
-            }
-            0x8d => {
-                let addr = self.absolute();
-                self.sta(addr)
-            }
-            0x9d => {
-                let addr = self.absolute_x();
-                self.sta(addr)
-            }
-            0x99 => {
-                let addr = self.absolute_y();
-                self.sta(addr)
-            }
-            0x81 => {
-                let addr = self.indexed_indirect();
-                self.sta(addr)
-            }
-            0x91 => {
-                let addr = self.indirect_indexed();
-                self.sta(addr)
-            }
+            0xE9 => self.sbc(addr.unwrap()),
+            0xE5 => self.sbc(addr.unwrap()),
+            0xF5 => self.sbc(addr.unwrap()),
+            0xED => self.sbc(addr.unwrap()),
+            0xFD => self.sbc(addr.unwrap()),
+            0xF9 => self.sbc(addr.unwrap()),
+            0xE1 => self.sbc(addr.unwrap()),
+            0xF1 => self.sbc(addr.unwrap()),
 
-            0x86 => {
-                let addr = self.zero_page();
-                self.stx(addr)
-            }
-            0x96 => {
-                let addr = self.zero_page_y();
-                self.stx(addr)
-            }
-            0x8e => {
-                let addr = self.absolute();
-                self.stx(addr)
-            }
+            0xa1 => self.lda(addr.unwrap()),
+            0xa5 => self.lda(addr.unwrap()),
+            0xa9 => self.lda(addr.unwrap()),
+            0xad => self.lda(addr.unwrap()),
+            0xb1 => self.lda(addr.unwrap()),
+            0xb5 => self.lda(addr.unwrap()),
+            0xb9 => self.lda(addr.unwrap()),
+            0xbd => self.lda(addr.unwrap()),
 
-            0x84 => {
-                let addr = self.zero_page();
-                self.sty(addr)
-            }
-            0x94 => {
-                let addr = self.zero_page_x();
-                self.sty(addr)
-            }
-            0x8c => {
-                let addr = self.absolute();
-                self.sty(addr)
-            }
+            0xa2 => self.ldx(addr.unwrap()),
+            0xa6 => self.ldx(addr.unwrap()),
+            0xb6 => self.ldx(addr.unwrap()),
+            0xae => self.ldx(addr.unwrap()),
+            0xbe => self.ldx(addr.unwrap()),
+
+            0xa0 => self.ldy(addr.unwrap()),
+            0xa4 => self.ldy(addr.unwrap()),
+            0xb4 => self.ldy(addr.unwrap()),
+            0xac => self.ldy(addr.unwrap()),
+            0xbc => self.ldy(addr.unwrap()),
+
+            0x85 => self.sta(addr.unwrap()),
+            0x95 => self.sta(addr.unwrap()),
+            0x8d => self.sta(addr.unwrap()),
+            0x9d => self.sta(addr.unwrap()),
+            0x99 => self.sta(addr.unwrap()),
+            0x81 => self.sta(addr.unwrap()),
+            0x91 => self.sta(addr.unwrap()),
+
+            0x86 => self.stx(addr.unwrap()),
+            0x96 => self.stx(addr.unwrap()),
+            0x8e => self.stx(addr.unwrap()),
+
+            0x84 => self.sty(addr.unwrap()),
+            0x94 => self.sty(addr.unwrap()),
+            0x8c => self.sty(addr.unwrap()),
 
             // Comparisons
             0xc9 => {
                 let a = self.a;
-                let addr = self.immediate();
-                self.compare(addr, a);
+                self.compare(addr.unwrap(), a);
             }
             0xc5 => {
                 let a = self.a;
-                let addr = self.zero_page();
-                self.compare(addr, a);
+                self.compare(addr.unwrap(), a);
             }
             0xd5 => {
                 let a = self.a;
-                let addr = self.zero_page_x();
-                self.compare(addr, a);
+                self.compare(addr.unwrap(), a);
             }
             0xcd => {
                 let a = self.a;
-                let addr = self.absolute();
-                self.compare(addr, a);
+                self.compare(addr.unwrap(), a);
             }
             0xdd => {
                 let a = self.a;
-                let addr = self.absolute_x();
-                self.compare(addr, a);
+
+                self.compare(addr.unwrap(), a);
             }
             0xd9 => {
                 let a = self.a;
-                let addr = self.absolute_y();
-                self.compare(addr, a);
+
+                self.compare(addr.unwrap(), a);
             }
             0xc1 => {
                 let a = self.a;
-                let addr = self.indexed_indirect();
-                self.compare(addr, a);
+
+                self.compare(addr.unwrap(), a);
             }
             0xd1 => {
                 let a = self.a;
-                let addr = self.indirect_indexed();
-                self.compare(addr, a);
+
+                self.compare(addr.unwrap(), a);
             }
 
             0xe0 => {
                 let x = self.x;
-                let addr = self.immediate();
-                self.compare(addr, x);
+
+                self.compare(addr.unwrap(), x);
             }
             0xe4 => {
                 let x = self.x;
-                let addr = self.zero_page();
-                self.compare(addr, x);
+
+                self.compare(addr.unwrap(), x);
             }
             0xec => {
                 let x = self.x;
-                let addr = self.absolute();
-                self.compare(addr, x);
+
+                self.compare(addr.unwrap(), x);
             }
 
             0xc0 => {
                 let y = self.y;
-                let addr = self.immediate();
-                self.compare(addr, y);
+
+                self.compare(addr.unwrap(), y);
             }
             0xc4 => {
                 let y = self.y;
-                let addr = self.zero_page();
-                self.compare(addr, y);
+
+                self.compare(addr.unwrap(), y);
             }
             0xcc => {
                 let y = self.y;
-                let addr = self.absolute();
-                self.compare(addr, y);
+
+                self.compare(addr.unwrap(), y);
             }
 
             // Bitwise operations
-            0x29 => {
-                let addr = self.immediate();
-                self.and(addr)
-            }
-            0x25 => {
-                let addr = self.zero_page();
-                self.and(addr)
-            }
-            0x35 => {
-                let addr = self.zero_page_x();
-                self.and(addr)
-            }
-            0x2d => {
-                let addr = self.absolute();
-                self.and(addr)
-            }
-            0x3d => {
-                let addr = self.absolute_x();
-                self.and(addr)
-            }
-            0x39 => {
-                let addr = self.absolute_y();
-                self.and(addr)
-            }
-            0x21 => {
-                let addr = self.indexed_indirect();
-                self.and(addr)
-            }
-            0x31 => {
-                let addr = self.indirect_indexed();
-                self.and(addr)
-            }
+            0x29 => self.and(addr.unwrap()),
+            0x25 => self.and(addr.unwrap()),
+            0x35 => self.and(addr.unwrap()),
+            0x2d => self.and(addr.unwrap()),
+            0x3d => self.and(addr.unwrap()),
+            0x39 => self.and(addr.unwrap()),
+            0x21 => self.and(addr.unwrap()),
+            0x31 => self.and(addr.unwrap()),
 
-            0x09 => {
-                let addr = self.immediate();
-                self.ora(addr)
-            }
-            0x05 => {
-                let addr = self.zero_page();
-                self.ora(addr)
-            }
-            0x15 => {
-                let addr = self.zero_page_x();
-                self.ora(addr)
-            }
-            0x0d => {
-                let addr = self.absolute();
-                self.ora(addr)
-            }
-            0x1d => {
-                let addr = self.absolute_x();
-                self.ora(addr)
-            }
-            0x19 => {
-                let addr = self.absolute_y();
-                self.ora(addr)
-            }
-            0x01 => {
-                let addr = self.indexed_indirect();
-                self.ora(addr)
-            }
-            0x11 => {
-                let addr = self.indirect_indexed();
-                self.ora(addr)
-            }
+            0x09 => self.ora(addr.unwrap()),
+            0x05 => self.ora(addr.unwrap()),
+            0x15 => self.ora(addr.unwrap()),
+            0x0d => self.ora(addr.unwrap()),
+            0x1d => self.ora(addr.unwrap()),
+            0x19 => self.ora(addr.unwrap()),
+            0x01 => self.ora(addr.unwrap()),
+            0x11 => self.ora(addr.unwrap()),
 
-            0x49 => {
-                let addr = self.immediate();
-                self.eor(addr)
-            }
-            0x45 => {
-                let addr = self.zero_page();
-                self.eor(addr)
-            }
-            0x55 => {
-                let addr = self.zero_page_x();
-                self.eor(addr)
-            }
-            0x4d => {
-                let addr = self.absolute();
-                self.eor(addr)
-            }
-            0x5d => {
-                let addr = self.absolute_x();
-                self.eor(addr)
-            }
-            0x59 => {
-                let addr = self.absolute_y();
-                self.eor(addr)
-            }
-            0x41 => {
-                let addr = self.indexed_indirect();
-                self.eor(addr)
-            }
-            0x51 => {
-                let addr = self.indirect_indexed();
-                self.eor(addr)
-            }
+            0x49 => self.eor(addr.unwrap()),
+            0x45 => self.eor(addr.unwrap()),
+            0x55 => self.eor(addr.unwrap()),
+            0x4d => self.eor(addr.unwrap()),
+            0x5d => self.eor(addr.unwrap()),
+            0x59 => self.eor(addr.unwrap()),
+            0x41 => self.eor(addr.unwrap()),
+            0x51 => self.eor(addr.unwrap()),
 
-            0x24 => {
-                let addr = self.zero_page();
-                self.bit(addr)
-            }
-            0x2c => {
-                let addr = self.absolute();
-                self.bit(addr)
-            }
+            0x24 => self.bit(addr.unwrap()),
+            0x2c => self.bit(addr.unwrap()),
 
             // Shifts and rotates
             0x2a => self.rol_a(),
-            0x26 => {
-                let addr = self.zero_page();
-                self.rol(addr)
-            }
-            0x36 => {
-                let addr = self.zero_page_x();
-                self.rol(addr)
-            }
-            0x2e => {
-                let addr = self.absolute();
-                self.rol(addr)
-            }
-            0x3e => {
-                let addr = self.absolute_x();
-                self.rol(addr)
-            }
+            0x26 => self.rol(addr.unwrap()),
+            0x36 => self.rol(addr.unwrap()),
+            0x2e => self.rol(addr.unwrap()),
+            0x3e => self.rol(addr.unwrap()),
 
             0x6a => self.ror_a(),
-            0x66 => {
-                let addr = self.zero_page();
-                self.ror(addr)
-            }
-            0x76 => {
-                let addr = self.zero_page_x();
-                self.ror(addr)
-            }
-            0x6e => {
-                let addr = self.absolute();
-                self.ror(addr)
-            }
-            0x7e => {
-                let addr = self.absolute_x();
-                self.ror(addr)
-            }
+            0x66 => self.ror(addr.unwrap()),
+            0x76 => self.ror(addr.unwrap()),
+            0x6e => self.ror(addr.unwrap()),
+            0x7e => self.ror(addr.unwrap()),
 
             0x0a => self.asl_a(),
-            0x06 => {
-                let addr = self.zero_page();
-                self.asl(addr)
-            }
-            0x16 => {
-                let addr = self.zero_page_x();
-                self.asl(addr)
-            }
-            0x0e => {
-                let addr = self.absolute();
-                self.asl(addr)
-            }
-            0x1e => {
-                let addr = self.absolute_x();
-                self.asl(addr)
-            }
+            0x06 => self.asl(addr.unwrap()),
+            0x16 => self.asl(addr.unwrap()),
+            0x0e => self.asl(addr.unwrap()),
+            0x1e => self.asl(addr.unwrap()),
 
             0x4a => self.lsr_a(),
-            0x46 => {
-                let addr = self.zero_page();
-                self.lsr(addr)
-            }
-            0x56 => {
-                let addr = self.zero_page_x();
-                self.lsr(addr)
-            }
-            0x4e => {
-                let addr = self.absolute();
-                self.lsr(addr)
-            }
-            0x5e => {
-                let addr = self.absolute_x();
-                self.lsr(addr)
-            }
+            0x46 => self.lsr(addr.unwrap()),
+            0x56 => self.lsr(addr.unwrap()),
+            0x4e => self.lsr(addr.unwrap()),
+            0x5e => self.lsr(addr.unwrap()),
 
             // Increments and decrements
-            0xe6 => {
-                let addr = self.zero_page();
-                self.inc(addr)
-            }
-            0xf6 => {
-                let addr = self.zero_page_x();
-                self.inc(addr)
-            }
-            0xee => {
-                let addr = self.absolute();
-                self.inc(addr)
-            }
-            0xfe => {
-                let addr = self.absolute_x();
-                self.inc(addr)
-            }
+            0xe6 => self.inc(addr.unwrap()),
+            0xf6 => self.inc(addr.unwrap()),
+            0xee => self.inc(addr.unwrap()),
+            0xfe => self.inc(addr.unwrap()),
 
-            0xc6 => {
-                let addr = self.zero_page();
-                self.dec(addr)
-            }
-            0xd6 => {
-                let addr = self.zero_page_x();
-                self.dec(addr)
-            }
-            0xce => {
-                let addr = self.absolute();
-                self.dec(addr)
-            }
-            0xde => {
-                let addr = self.absolute_x();
-                self.dec(addr)
-            }
+            0xc6 => self.dec(addr.unwrap()),
+            0xd6 => self.dec(addr.unwrap()),
+            0xce => self.dec(addr.unwrap()),
+            0xde => self.dec(addr.unwrap()),
 
             0xe8 => self.inx(),
             0xca => self.dex(),
             0xc8 => self.iny(),
             0x88 => self.dey(),
 
-            // Register moves
             0xaa => self.tax(),
             0xa8 => self.tay(),
             0x8a => self.txa(),
@@ -891,7 +571,6 @@ impl Cpu {
             0x9a => self.txs(),
             0xba => self.tsx(),
 
-            // Flag operations
             0x18 => self.clc(),
             0x38 => self.sec(),
             0x58 => self.cli(),
@@ -900,66 +579,28 @@ impl Cpu {
             0xd8 => self.cld(),
             0xf8 => self.sed(),
 
-            // Branches
-            0x10 => {
-                let addr = self.relative();
-                self.bpl(addr);
-            }
-            0x30 => {
-                let addr = self.relative();
-                self.bmi(addr);
-            }
-            0x50 => {
-                let addr = self.relative();
-                self.bvc(addr);
-            }
-            0x70 => {
-                let addr = self.relative();
-                self.bvs(addr);
-            }
-            0x90 => {
-                let addr = self.relative();
-                self.bcc(addr);
-            }
-            0xb0 => {
-                let addr = self.relative();
-                self.bcs(addr);
-            }
-            0xd0 => {
-                let addr = self.relative();
-                self.bne(addr);
-            }
-            0xf0 => {
-                let addr = self.relative();
-                self.beq(addr);
-            }
+            0x10 => self.bpl(addr.unwrap()),
+            0x30 => self.bmi(addr.unwrap()),
+            0x50 => self.bvc(addr.unwrap()),
+            0x70 => self.bvs(addr.unwrap()),
+            0x90 => self.bcc(addr.unwrap()),
+            0xb0 => self.bcs(addr.unwrap()),
+            0xd0 => self.bne(addr.unwrap()),
+            0xf0 => self.beq(addr.unwrap()),
 
-            // Jumps
-            0x4c => {
-                let addr = self.absolute();
-                self.jmp(addr);
-            }
-            0x6c => {
-                let addr = self.indirect();
-                self.jmp(addr);
-            }
+            0x4c => self.jmp(addr.unwrap()),
+            0x6c => self.jmp(addr.unwrap()),
 
-            // Procedure calls
-            0x20 => {
-                let addr = self.absolute();
-                self.jsr(addr);
-            }
+            0x20 => self.jsr(addr.unwrap()),
             0x60 => self.rts(),
             0x00 => self.brk(),
             0x40 => self.rti(),
 
-            // Stack operations
             0x48 => self.pha(),
             0x68 => self.pla(),
             0x08 => self.php(),
             0x28 => self.plp(),
 
-            // No operation
             0xea => {}
 
             _ => {}
@@ -1353,7 +994,8 @@ impl Cpu {
         self.a = res;
         self.check_negative_zero(res);
 
-        self.p.set_c(a as isize - m as isize - (1 - c) as isize >= 0);
+        self.p
+            .set_c(a as isize - m as isize - (1 - c) as isize >= 0);
 
         self.p
             .set_v((a ^ m) & 0x80 != 0 && (a ^ self.a) & 0x80 != 0);

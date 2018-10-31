@@ -1,4 +1,4 @@
-use rom::{INesHeader, Rom};
+use rom::Rom;
 
 pub struct Mapper {
     rom: Rom,
@@ -31,36 +31,3 @@ impl Mapper {
         }
     }
 }
-
-// func (m *Mapper2) Write(address uint16, value byte) {
-// 	switch {
-// 	case address < 0x2000:
-// 		m.CHR[address] = value
-// 	case address >= 0x8000:
-// 		m.prgBank1 = int(value) % m.prgBanks
-// 	case address >= 0x6000:
-// 		index := int(address) - 0x6000
-// 		m.SRAM[index] = value
-// 	default:
-// 		log.Fatalf("unhandled mapper2 write at address: 0x%04X", address)
-// 	}
-// }
-
-// func (m *Mapper2) Read(address uint16) byte {
-// 	switch {
-// 	case address < 0x2000:
-// 		return m.CHR[address]
-// 	case address >= 0xC000:
-// 		index := m.prgBank2*0x4000 + int(address-0xC000)
-// 		return m.PRG[index]
-// 	case address >= 0x8000:
-// 		index := m.prgBank1*0x4000 + int(address-0x8000)
-// 		return m.PRG[index]
-// 	case address >= 0x6000:
-// 		index := int(address) - 0x6000
-// 		return m.SRAM[index]
-// 	default:
-// 		log.Fatalf("unhandled mapper2 read at address: 0x%04X", address)
-// 	}
-// 	return 0
-// }
