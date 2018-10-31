@@ -285,6 +285,67 @@ impl Cpu {
         );
     }
 
+    // Addressing modes
+
+    fn absolute(&self) -> u16 {
+        self.read16(self.pc + 1)
+    }
+
+    fn absolute_x(&mut self) -> u16 {
+        let addr = self.read16(self.pc + 1) + self.x as u16;
+        if Cpu::check_same_page(addr - self.x as u16, addr) {
+            self.cycles += 1;
+        }
+        return addr;
+    }
+
+    fn absolute_y(&mut self) -> u16 {
+        let addr = self.read16(self.pc + 1) + self.y as u16;
+        if Cpu::check_same_page(addr - self.y as u16, addr) {
+            self.cycles += 1;
+        }
+        return addr;
+    }
+
+    fn immediate(&mut self) -> u16 {
+        self.pc + 1
+    }
+
+    fn indexed_indirect(&self) -> u16 {
+        let addr = self.read(self.pc + 1) as u16 + self.x as u16;
+        self.read16_wrap(addr)
+    }
+
+    fn indirect(&self) -> u16 {
+        self.read16_wrap(self.read16(self.pc + 1))
+    }
+
+    fn indirect_indexed(&self) -> u16 {
+        let addr = self.read(self.pc + 1) as u16 + self.y as u16;
+        self.read16_wrap(addr)
+    }
+
+    fn relative(&self) -> u16 {
+        let offset = self.read(self.pc + 1) as u16;
+        if offset < 0x80 {
+            return self.pc + 2 + offset;
+        } else {
+            return self.pc + 2 + offset - 0x100;
+        }
+    }
+
+    fn zero_page(&self) -> u16 {
+        self.read(self.pc + 1) as u16
+    }
+
+    fn zero_page_x(&self) -> u16 {
+        (self.read(self.pc + 1) + self.x) as u16 & 0xFF
+    }
+
+    fn zero_page_y(&self) -> u16 {
+        (self.read(self.pc + 1) + self.y) as u16 & 0xFF
+    }
+
     fn exec(&mut self, opcode: u8) {
         match opcode {
             0x69 => {
@@ -528,7 +589,7 @@ impl Cpu {
         let m = self.read(addr);
         self.write(addr, m + 1);
         self.check_negative_zero(m + 1);
-    } 
+    }
 
     /// INX - Increment X Register
     fn inx(&mut self) {
@@ -582,7 +643,6 @@ impl Cpu {
         self.a >>= 1;
         let a = self.a;
         self.check_negative_zero(a);
-
     }
 
     /// LSR - Logical Shift Right
@@ -604,7 +664,7 @@ impl Cpu {
     fn pha(&mut self) {
         let a = self.a;
         self.push(a);
-    } 
+    }
 
     /// PHP - Push Processor Status
     fn php(&mut self) {
@@ -635,7 +695,7 @@ impl Cpu {
     }
 
     /// ROL - Rotate Left
-    fn rol(&mut self, addr) {
+    fn rol(&mut self, addr: u16) {
         let c = self.p.get_c() as u8;
         let m = self.read(addr);
         self.p.set_c((m >> 7) & 1 == 1);
@@ -645,11 +705,11 @@ impl Cpu {
 
     /// ROR - Rotate Right (Accumulator)
     fn ror_a(&mut self) {
-       let c = self.p.get_c() as u8;
-       self.p.set_c(self.a & 1 == 1);
-       self.a = (self.a >> 1) | (c << 7);
-       let a = self.a;
-       self.check_negative_zero(a); 
+        let c = self.p.get_c() as u8;
+        self.p.set_c(self.a & 1 == 1);
+        self.a = (self.a >> 1) | (c << 7);
+        let a = self.a;
+        self.check_negative_zero(a);
     }
 
     /// ROR - Rotate Right
@@ -680,11 +740,11 @@ impl Cpu {
         let res = a - m - (1 - c);
         self.a = res;
         self.check_negative_zero(res);
-        
+
         self.p.set_c(a as u16 - m as u16 - (1 - c) as u16 >= 0);
 
-        self.p.set_v((a^m)&0x80 != 0 && (a^self.a)&0x80 != 0);
-        
+        self.p
+            .set_v((a ^ m) & 0x80 != 0 && (a ^ self.a) & 0x80 != 0);
     }
 
     /// SEC - Set Carry Flag
@@ -758,7 +818,5 @@ impl Cpu {
         self.a = self.y;
         let a = self.a;
         self.check_negative_zero(a);
-    } 
-
-
+    }
 }
