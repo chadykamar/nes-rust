@@ -687,7 +687,6 @@ impl Cpu {
         
     }
 
-
     /// SEC - Set Carry Flag
     fn sec(&mut self) {
         self.p.set_c(true);
@@ -702,4 +701,64 @@ impl Cpu {
     fn sei(&mut self) {
         self.p.set_i(true);
     }
+
+    // STA - Store Accumulator
+    fn sta(&mut self, addr: u16) {
+        let a = self.a;
+        self.write(addr, a);
+    }
+
+    /// STX - Store X Register
+    fn stx(&mut self, addr: u16) {
+        let x = self.x;
+        self.write(addr, x);
+    }
+
+    /// STY - Story Y Register
+    fn sty(&mut self, addr: u16) {
+        let y = self.y;
+        self.write(addr, y);
+    }
+
+    /// TAX - Transfer Accumulator to X
+    fn tax(&mut self) {
+        self.x = self.a;
+        let x = self.x;
+        self.check_negative_zero(x);
+    }
+
+    /// TAY - Transfer Accumulator to Y
+    fn tay(&mut self) {
+        self.y = self.a;
+        let y = self.y;
+        self.check_negative_zero(y);
+    }
+
+    /// TSX - Transfer Stack Pointer to X
+    fn tsx(&mut self) {
+        self.x = self.sp;
+        let x = self.x;
+        self.check_negative_zero(x);
+    }
+
+    /// TXA - Transfer X to Accumulator
+    fn txa(&mut self) {
+        self.a = self.x;
+        let a = self.a;
+        self.check_negative_zero(a);
+    }
+
+    /// TXS - Transfer X to Stack Pointer
+    fn txs(&mut self) {
+        self.sp = self.x;
+    }
+
+    // TYA - Transfer Y to Accumulator
+    fn tya(&mut self) {
+        self.a = self.y;
+        let a = self.a;
+        self.check_negative_zero(a);
+    } 
+
+
 }
