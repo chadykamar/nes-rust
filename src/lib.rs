@@ -127,7 +127,7 @@ mod tests {
 
             // cyc
             token = split.next().unwrap();
-            if token.chars().count() == 4 {
+            if token == "CYC:" {
                 token = split.next().unwrap();
                 let cycles = token.parse::<usize>().unwrap();
                 assert_eq!(cycles, registers.6);
