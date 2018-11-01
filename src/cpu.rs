@@ -1,4 +1,5 @@
 use bitfield::BitRange;
+use log::Level::Debug;
 use mapper::Mapper;
 
 /// Stack offset
@@ -123,6 +124,18 @@ impl Cpu {
         }
     }
 
+    pub fn registers(&self) -> (u16, u8, u8, u8, u8, u8, usize) {
+        (
+            self.pc,
+            self.sp,
+            self.a,
+            self.x,
+            self.y,
+            self.p.bit_range(7, 0),
+            (self.cycles * 3) % 341,
+        )
+    }
+
     pub fn reset(&mut self) {
         self.p.set_bit_range(7, 0, 0x24);
         self.sp = 0xFD;
@@ -208,7 +221,7 @@ impl Cpu {
 
     fn read16_wrap(&self, addr: u16) -> u16 {
         let low = self.read(addr) as u16;
-        let high = self.read(addr & 0xFF00) as u16;
+        let high = self.read((addr & 0xFF00) as u16 | (addr as u8 + 1) as u16) as u16;
         (high << 8) | low
     }
 
@@ -287,7 +300,10 @@ impl Cpu {
             third_byte = String::from("  ");
         }
         let p: u8 = self.p.bit_range(7, 0);
-        trace!(
+        if log_enabled!(Debug) {
+            println!("Logging should work.")
+        }
+        info!(
             "{:#X}  {} {} {}  {} {:28} A:{:02X} X:{:02X} Y:{:02X} P:{:02X} SP:{:02X} CYC:{:3}\n",
             self.pc,
             first_byte,
@@ -331,7 +347,7 @@ impl Cpu {
     }
 
     fn indexed_indirect(&self) -> u16 {
-        let addr = self.read(self.pc + 1) as u16 + self.x as u16;
+        let addr = (self.read(self.pc + 1) + self.x) as u16;
         self.read16_wrap(addr)
     }
 
@@ -339,8 +355,11 @@ impl Cpu {
         self.read16_wrap(self.read16(self.pc + 1))
     }
 
-    fn indirect_indexed(&self) -> u16 {
+    fn indirect_indexed(&mut self) -> u16 {
         let addr = self.read(self.pc + 1) as u16 + self.y as u16;
+        if Cpu::check_same_page(addr - self.y as u16, addr) {
+            self.cycles += 1;
+        }
         self.read16_wrap(addr)
     }
 
