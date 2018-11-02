@@ -19,6 +19,13 @@ const PALETTE: [u32; 64] = [
     0x000000,
 ];
 
+struct Sprite {
+    position: u8,
+    pattern: u8,
+    priority: u8,
+    index: u8
+}
+
 bitfield!{
     struct PpuCtrl(u8);
     impl Debug;
@@ -74,10 +81,26 @@ pub struct Ppu {
     cycle: usize,
     frame: usize,
     screen: Array3<u8>,
+    vram_addr: u16,
+    temp_vram_addr: u16,
+
+    // Mem
+
+    // palette: [u8; 32],
+    // nametable: [u8; 0x800],
+    sprites: Vec<Sprite>,
 
     // Flags
     /// Even (true) or odd (false)
     even: bool,
+
+    // Temporary variables
+    nametable: u8,
+    attribute_table: u8,
+    low_tile: u8,
+    high_tile: u8,
+    tile_data: usize,
+
 
     //Registers
     /// $2000 PPUCTRL
@@ -109,7 +132,17 @@ impl Ppu {
         Ppu {
             scanline: 0,
             cycle: 0,
+            frame: 0,
             screen: Array3::zeros((256, 240, 3)),
+            nametable: 0,
+            vram_addr: 0,
+            temp_vram_addr: 0,
+            attribute_table: 0,
+            low_tile: 0,
+            high_tile: 0,
+            tile_data: 0,
+            sprites: vec!(),
+
             even: true,
             ppu_ctrl: PpuCtrl(0),
             ppu_mask: PpuMask(0),
@@ -120,7 +153,6 @@ impl Ppu {
             ppu_addr: 0,
             ppu_data: 0,
             oam_dma: 0,
-            frame: 0,
         }
     }
 
@@ -157,9 +189,8 @@ impl Ppu {
     }
 
     fn tick(&mut self) {
-        
         // TODO: NMI
-        
+
         if self.ppu_mask.show_background() || self.ppu_mask.show_sprites() {
             if self.even && self.scanline == 261 && self.cycle == 339 {
                 self.cycle = 0;
@@ -167,6 +198,7 @@ impl Ppu {
                 self.frame += 1;
                 self.even = !self.even;
                 return;
+            }
         }
 
         self.cycle += 1;
@@ -182,5 +214,118 @@ impl Ppu {
         }
     }
 
-    pub fn step(&mut self) {}
+    fn eval(&self) {
+
+    }
+
+    fn render_pixel(&mut self) {}
+
+    pub fn step(&mut self) {
+        // TODO NMI and VBLANK
+        let pre_render_line = self.scanline == 261;
+        let visible_line = self.scanline < 240;
+
+        let pre_fetch_cycle = 321 <= self.cycle && self.cycle <= 336;
+        let visible_cycle = 1 <= self.cycle && self.cycle <= 256;
+
+        if self.ppu_mask.show_background() {
+            if visible_line && visible_cycle {
+                self.render_pixel()
+            }
+
+            if (pre_render_line || visible_line) && (pre_fetch_cycle || visible_cycle) {
+                self.tile_data <<= 4;
+                match self.cycle % 8 {
+                    1 => {
+                        let addr = 0x2000 | (self.vram_addr & 0x0FFF);
+                        self.nametable = self.read_register(addr);
+                    }
+                    3 => {
+                        let a = self.vram_addr;
+                        let addr = 0x23C0 | (a & 0x0C00) | ((a >> 4) & 0x38) | ((a >> 2) & 0x07);
+                        let shift = ((a >> 4) & 4) | (a & 2);
+                        self.attribute_table = ((self.read_register(addr) >> shift) & 3) << 2;
+                    }
+                    5 => {
+                        let fine_y = (self.vram_addr >> 12) & 7;
+                        let table = self.ppu_ctrl.background_pattern_table_addr() as u16;
+                        let addr = 0x1000 * table + self.nametable as u16 * 16 + fine_y;
+                        self.low_tile = self.read_register(addr);
+                    }
+                    7 => {
+                        let fine_y = (self.vram_addr >> 12) & 7;
+                        let table = self.ppu_ctrl.background_pattern_table_addr() as u16;
+                        let addr = 0x1000 * table + self.nametable as u16 * 16 + fine_y;
+                        self.high_tile = self.read_register(addr + 8);
+                    }
+                    0 => {
+                        let mut data: usize = 0;
+                        for _ in 0..8 {
+                            let a = self.attribute_table;
+                            let low = (self.low_tile & 0x80) >> 7;
+                            let high = (self.high_tile & 0x80) >> 6;
+                            self.low_tile <<= 1;
+                            self.high_tile <<= 1;
+                            data <<= 4;
+                            data |= a as usize | low as usize | high as usize;
+                        }
+                        self.tile_data |= data;
+                    }
+                    _ => {}
+                }
+            }
+            if pre_render_line && 280 <= self.cycle && self.cycle <= 304 {
+                self.vram_addr = (self.vram_addr & 0x841F) | (self.temp_vram_addr & 0x7BE0);
+            }
+
+            if pre_render_line || visible_line {
+                if pre_fetch_cycle && self.cycle % 8 == 0 {
+                    if self.vram_addr & 0x001F == 31 {
+                        self.vram_addr &= 0xFFE0;
+                        self.vram_addr ^= 0x0400;
+                    } else {
+                        self.vram_addr += 1;
+                    }
+                }
+                if self.cycle == 256 {
+                    if self.vram_addr & 0x7000 != 0x7000 {
+                        self.vram_addr += 0x1000
+                    } else {
+                        self.vram_addr &= 0x8FFF;
+                        let mut y = (self.vram_addr & 0x03E0) >> 5;
+                        if y == 29 {
+                            y = 0;
+                            self.vram_addr ^= 0x0800;
+                        } else if y == 31 {
+                            y = 0;
+                        } else {
+                            y += 1;
+                        }
+                        self.vram_addr = (self.vram_addr & 0xFC1F) | (y << 5);
+                    }
+                }
+                if self.cycle == 257 {
+                    self.vram_addr = (self.vram_addr & 0xFBE0) | (self.temp_vram_addr & 0x041F);
+                }
+            }
+        }
+
+        if self.ppu_mask.show_sprites() {
+            if self.cycle == 257 {
+                // if visible_line {
+                //     self.eval();
+                // } else {
+                //     // Sprites
+                    
+                // }
+		}
+        }
+
+        // vblank
+        if self.scanline == 241 && self.cycle == 1 {}
+        if self.scanline == 261 && self.cycle == 1 {
+            self.ppu_status.set_sprite_zero_hit(false);
+            self.ppu_status.set_sprite_overflow(false);
+        }
+    }
 }
