@@ -5,6 +5,9 @@ extern crate bitfield;
 extern crate log;
 extern crate log4rs;
 
+#[macro_use]
+extern crate ndarray;
+
 use log::LevelFilter;
 use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Config, Root};
@@ -12,6 +15,7 @@ use log4rs::encode::pattern::PatternEncoder;
 
 pub mod cpu;
 pub mod mapper;
+pub mod ppu;
 pub mod rom;
 
 #[macro_use]
