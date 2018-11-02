@@ -23,11 +23,14 @@ pub mod util;
 
 use cpu::Cpu;
 use mapper::Mapper;
+use ppu::Ppu;
 use rom::Rom;
 
 use std::fs::File;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+
+/// Initializes and configures logging using log4rs
 fn init_logging() {
     let logfile = FileAppender::builder()
         .encoder(Box::new(PatternEncoder::new("{l} - {m}\n")))
@@ -42,6 +45,7 @@ fn init_logging() {
     log4rs::init_config(config).unwrap();
 }
 
+/// Starts the emulator
 pub fn start(rom: Rom) {
     // let rom = Box::new(rom);
 
@@ -60,9 +64,9 @@ pub fn start(rom: Rom) {
 
     let mapper = Mapper::new(rom);
     let mut cpu = Cpu::new(mapper);
+    let ppu = Ppu::new();
 
-    // TODO: No reset when running nestest
-    // cpu.reset();
+    cpu.reset();
 
     loop {
         cpu.step();
