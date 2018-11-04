@@ -41,7 +41,7 @@ bitfield!{
     /// the position of pixels within the sprite. If, for example, a sprite co-
     /// vers (120, 130) through (127, 137), it'll still cover the same area
     /// when flipped.
-    pub flip_h, set_flip_h: 3;
+    pub flip_h, set_flip_h: 6;
     /// Flip sprite vertically.
     /// * In 8x16 mode, vertical flip flips each of the subtiles and also exchan-
     /// ges their position; the odd-numbered tile of a vertically flipped sprite
@@ -50,7 +50,7 @@ bitfield!{
     /// the position of pixels within the sprite. If, for example, a sprite
     /// covers (120, 130) through (127, 137), it'll still cover the same area
     /// when flipped.
-    pub flip_v, set_flip_v: 4;
+    pub flip_v, set_flip_v: 7;
 }
 
 #[derive(Copy, Clone)]
@@ -68,6 +68,8 @@ struct Sprite {
     /// * For 8x16 sprites, the PPU ignores the pattern table selection and
     /// selects a pattern table from bit 0 of this number.
     tile: u8,
+    /// Sprite attributes, including palette priority, and flipping.
+    attributes: SpriteAttributes,
     /// X position of left side of sprite.
     /// X-scroll values of $F9-FF results in parts of the sprite to be past the
     /// right edge of the screen, thus invisible. It is not possible to have a
