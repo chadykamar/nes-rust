@@ -1,6 +1,7 @@
 use bitfield::BitRange;
 
-use ndarray::Array3;
+use mapper::Mapper;
+use ndarray::Array2;
 
 /// Width of the screen for NTSC systems
 const SCREEN_WIDTH: usize = 256;
@@ -76,8 +77,6 @@ struct Sprite {
     /// sprite partially visible on the left edge. Instead, left-clipping
     /// through PPUMASK ($2001) can be used to simulate this effect.
     x: u8,
-    /// Sprite attributes, including palette priority, and flipping.
-    attributes: SpriteAttributes,
 }
 
 ///
@@ -134,17 +133,21 @@ bitfield!{
 }
 
 pub struct Ppu<'a> {
+    mapper: Mapper,
     scanline: usize,
     cycle: usize,
     frame: usize,
-    screen: Array3<u8>,
+    screen: Array2<u32>,
     vram_addr: u16,
     temp_vram_addr: u16,
 
     // Mem'
     /// Object Attribute Memory which contains a display list of up to 64
     /// sprites, where each sprite's information occupies 4 bytes.
-    oam: [&'a Sprite; 64],
+    primary_oam: [&'a Sprite; 64],
+    secondary_oam: Vec<(&'a Sprite, usize)>,
+
+    nt: [u8; 0x800],
 
     // The NES uses two palettes, each with 16 entries, the image palette ($3F00-$3F0F) and the
     // sprite palette ($3F10-$3F1F). Since only 64 unique values are needed,
@@ -158,9 +161,8 @@ pub struct Ppu<'a> {
     /// in the system palette `PALETTE`.
     sprite_palette: [u8; 16],
 
-    // palette: [u8; 32],
     // nametable: [u8; 0x800],
-    sprites: Vec<&'a Sprite>,
+    
 
     // Flags
     /// Write toggle.
@@ -169,6 +171,7 @@ pub struct Ppu<'a> {
     even: bool,
 
     // Temporary variables
+    // TODO: Refactor
     nametable: u8,
     attribute_table: u8,
     low_tile: u8,
@@ -201,23 +204,26 @@ pub struct Ppu<'a> {
 }
 
 impl<'a> Ppu<'a> {
-    pub fn new() -> Ppu<'static> {
+    pub fn new(mapper: Mapper) -> Ppu<'static> {
         Ppu {
+            mapper: mapper,
+
             scanline: 0,
             cycle: 0,
             frame: 0,
-            screen: Array3::zeros((256, 240, 3)),
+            screen: Array2::zeros((256, 240)),
+            nt: [0; 0x800],
 
             image_palette: [0; 16],
             sprite_palette: [0; 16],
 
-            // TODO initialize properly
-            oam: [&Sprite {
+            primary_oam: [&Sprite {
                 y: 0,
                 tile: 0,
                 x: 0,
                 attributes: SpriteAttributes(0),
             }; 64],
+            secondary_oam: vec![],
             nametable: 0,
             vram_addr: 0,
             temp_vram_addr: 0,
@@ -225,7 +231,6 @@ impl<'a> Ppu<'a> {
             low_tile: 0,
             high_tile: 0,
             tile_data: 0,
-            sprites: vec![],
 
             even: true,
             write: true,
@@ -239,6 +244,26 @@ impl<'a> Ppu<'a> {
             ppu_addr: 0,
             ppu_data: 0,
             oam_dma: 0,
+        }
+    }
+
+    fn read(&self, addr: u16) -> u8 {
+        match addr {
+            0x0000...0x1FFF => self.mapper.read(addr),
+            0x2000...0x3EFF => self.nt[addr as usize % 0x800],
+            0x3F00...0x3F0F => self.image_palette[addr as usize],
+            0x3F10...0x3F1F => self.sprite_palette[addr as usize],
+            0x3F20...0x3FFF => self.read(((addr - 0x3F00) % 32) + 0x3F00),
+        }
+    }
+
+    fn write(&self, addr: u16, val: u8) {
+        match addr {
+            0x0000...0x1FFF => self.mapper.write(addr, val),
+            0x2000...0x3EFF => self.nt[addr as usize % 0x800] = val,
+            0x3F00...0x3F0F => self.image_palette[addr as usize] = val,
+            0x3F10...0x3F1F => self.sprite_palette[addr as usize] = val,
+            0x3F20...0x3FFF => self.write(((addr - 0x3F00) % 32) + 0x3F00, val),
         }
     }
 
@@ -303,7 +328,7 @@ impl<'a> Ppu<'a> {
     /// PPU sprite evaluation is an operation done by the PPU once each
     /// scanline. It prepares the set of sprites and fetches their data to be
     /// rendered on the next scanline. Each scanline, the PPU reads the
-    /// spritelist (that is, Object Attribute Memory) to see which to draw:
+    /// Object Attribute Memory to see which to draw:
     /// * First, it clears the list of sprites to draw.
     /// * Second, it reads through OAM, checking which sprites will be on this
     /// scanline. It chooses the first eight it finds that do.
@@ -314,23 +339,140 @@ impl<'a> Ppu<'a> {
     /// it determines which pixels each has on the scanline and where to draw them.
     fn evaluate_sprites(&mut self) {
         let height = if self.ppu_ctrl.sprite_size() { 8 } else { 16 };
-        self.sprites = vec![];
+        self.secondary_oam = vec![];
 
-        for sprite in self.oam.iter() {
+        let mut count = 0;
+        for sprite in self.primary_oam.iter() {
             let row = self.scanline - sprite.y as usize;
             if row >= height {
                 continue;
             }
-            if self.sprites.len() < 8 {
-                self.sprites.push(sprite);
+            if self.secondary_oam.len() < 8 {
+                self.secondary_oam.push((sprite, row));
             }
+            count += 1;
         }
-        if self.sprites.len() > 8 {
+        if count > 8 {
             self.ppu_status.set_sprite_overflow(true);
         }
     }
 
-    fn render_pixel(&mut self) {}
+    fn sprite_pixel(&self) -> (usize, u32, Option<&Sprite>) {
+        if !self.ppu_mask.show_sprites() {
+            return (0, 0, None);
+        }
+        let x = self.cycle - 1;
+        if x < 8 && !self.ppu_mask.show_sprites_left() {
+            return (0, 0, None);
+        }
+
+        for (i, (sprite, row)) in self.secondary_oam.iter().enumerate() {
+            let x = self.cycle - 1;
+            let mut offset = x - sprite.x as usize;
+            if offset < 0 || offset > 7 {
+                continue;
+            }
+            offset = 7 - offset;
+            let color = (self.sprite_pattern(sprite, *row) >> (offset * 4)) & 0x0F;
+            if color % 4 == 0 {
+                continue;
+            }
+            return (i, color, Some(sprite));
+        }
+        (0, 0, None)
+    }
+
+    fn sprite_pattern(&self, sprite: &Sprite, mut row: usize) -> u32 {
+        let tile = sprite.tile;
+
+        row = (if self.ppu_ctrl.sprite_size() { 15 } else { 7 } as usize) - row;
+
+        let addr = if !self.ppu_ctrl.sprite_size() {
+            if sprite.attributes.flip_v() {
+                row = 7 - row;
+            }
+
+            let table_addr = 0x1000 * self.ppu_ctrl.sprite_pattern_table_addr() as u16;
+
+            table_addr + 16 * tile as u16 + row as u16
+        } else {
+            if sprite.attributes.flip_v() {
+                row = 15 - row;
+            }
+
+            let table_addr = 0x1000 * (tile as u16 & 1);
+            if row > 7 {
+                tile += 1;
+                row -= 8;
+            }
+
+            table_addr + 16 * tile as u16 + row as u16
+        };
+
+        let palette = sprite.attributes.palette() + 4;
+
+        let mut low_tile = self.read(addr);
+        let mut high_tile = self.read(addr + 8);
+
+        let mut pattern: u32 = 0;
+
+        for _ in 0..7 {
+            let mut a = 0u8;
+            let mut b = 0u8;
+
+            if sprite.attributes.flip_h() {
+                a = (low_tile & 1) << 0;
+                b = (high_tile & 1) << 1;
+                low_tile >>= 1;
+                high_tile >>= 1;
+            } else {
+                a = (low_tile & 0x80) >> 7;
+                b = (high_tile & 0x80) >> 6;
+                low_tile <<= 1;
+                high_tile <<= 1;
+            }
+            pattern <<= 4;
+            pattern |= (palette | a | b) as u32;
+        }
+        pattern
+    }
+
+    fn background_pixel(&self) -> u32 {
+        if !self.ppu_mask.show_background() {
+            return 0;
+        }
+        let x = self.cycle - 1;
+        if x < 8 && !self.ppu_mask.show_background_left() {
+            return 0;
+        }
+
+        (self.tile_data >> 32) as u32 >> ((7 - self.ppu_scroll) * 4) & 0x0F
+    }
+
+    fn render_pixel(&mut self) {
+        let (x, y) = (self.cycle - 1, self.scanline);
+
+        let mut background_color = self.background_pixel();
+        let (i, sprite_color, sprite) = self.sprite_pixel();
+
+        let color = match (background_color % 4 == 0, sprite_color % 4 == 0) {
+            (true, true) => 0,
+            (true, false) => sprite_color | 0x10,
+            (false, true) => background_color,
+            (false, false) => {
+                self.ppu_status.set_sprite_zero_hit(i == 0 && x < 255);
+
+                if sprite.unwrap().attributes.priority() {
+                    background_color
+                } else {
+                    sprite_color | 0x10
+                }
+            }
+        };
+        let addr = (color as u16) % 64;
+        let color = PALETTE[self.read(((addr - 0x3F00) % 32) + 0x3F00) as usize];
+        self.screen[[x, y]] = color;
+    }
 
     pub fn step(&mut self) {
         // TODO NMI and VBLANK

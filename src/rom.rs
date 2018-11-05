@@ -58,12 +58,11 @@ impl Rom {
         let mut chr_rom = vec![0u8; chr_bytes];
         try!(util::read_to_buf(&mut chr_rom, r));
 
-
         Ok(Rom {
             header: header,
             prg: prg_rom,
             chr: chr_rom,
-            sram: [0; 0x2000]
+            sram: [0; 0x2000],
         })
     }
 }
