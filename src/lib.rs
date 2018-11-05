@@ -8,10 +8,16 @@ extern crate log4rs;
 #[macro_use]
 extern crate ndarray;
 
+extern crate sdl2;
+
 use log::LevelFilter;
 use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Config, Root};
 use log4rs::encode::pattern::PatternEncoder;
+
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::Color;
 
 pub mod cpu;
 pub mod mapper;
@@ -22,13 +28,15 @@ pub mod rom;
 pub mod util;
 
 use cpu::Cpu;
-use mapper::Mapper;
+use mapper::{Mapper, MapperZero};
 use ppu::Ppu;
 use rom::Rom;
 
+use std::borrow::BorrowMut;
 use std::fs::File;
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
-
 
 /// Initializes and configures logging using log4rs
 fn init_logging() {
@@ -44,6 +52,10 @@ fn init_logging() {
 
     log4rs::init_config(config).unwrap();
 }
+
+fn sdl_start() {}
+
+fn wasm_start() {}
 
 /// Starts the emulator
 pub fn start(rom: Rom) {
@@ -62,14 +74,54 @@ pub fn start(rom: Rom) {
 
     println!("Loaded ROM: {}", rom.header);
 
-    let mapper = Mapper::new(rom);
-    let mut cpu = Cpu::new(mapper);
-    let ppu = Ppu::new();
+    // TODO initilize mapper from heaader
+
+    let mut mapper: Rc<RefCell<Box<Mapper>>> = Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
+    let mut cpu = Cpu::new(mapper.clone());
+    let mut ppu = Ppu::new(mapper.clone());
 
     cpu.reset();
 
-    loop {
-        cpu.step();
+    let sdl_context = sdl2::init().unwrap();
+
+    let video_subsystem = sdl_context.video().unwrap();
+
+    let audio_subsystem = sdl_context.audio().unwrap();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
+    let window = video_subsystem
+        .window("NES", 256, 240)
+        .position_centered()
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().build().unwrap();
+
+    canvas.set_draw_color(Color::RGB(0, 255, 255));
+    canvas.clear();
+    canvas.present();
+
+    let mut i = 0;
+    'running: loop {
+        i = (i + 1) % 255;
+        canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
+        canvas.clear();
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => break 'running,
+                _ => {}
+            }
+        }
+        let cpu_cycles = cpu.step();
+
+        for _ in 0..cpu_cycles {
+            ppu.step();
+        }
     }
 }
 
@@ -80,14 +132,14 @@ mod tests {
     use File;
 
     use Cpu;
-    use Mapper;
+    use {Mapper, MapperZero};
     use Rom;
 
     #[test]
     fn golden_log() {
         let path = Path::new("roms/nestest.nes");
         let rom = Rom::load(&mut File::open(&path).unwrap()).unwrap();
-        let mapper = Mapper::new(rom);
+        let mapper = MapperZero::new(rom);
         let mut cpu = Cpu::new(mapper);
 
         let file = File::open("roms/nestest.log").unwrap();
