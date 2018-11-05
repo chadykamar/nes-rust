@@ -3,6 +3,9 @@ use bitfield::BitRange;
 use mapper::Mapper;
 use ndarray::Array2;
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 /// Width of the screen for NTSC systems
 const SCREEN_WIDTH: usize = 256;
 
@@ -133,7 +136,7 @@ bitfield!{
 }
 
 pub struct Ppu<'a> {
-    mapper: Mapper,
+    mapper: Rc<RefCell<Box<Mapper>>>,
     scanline: usize,
     cycle: usize,
     frame: usize,
@@ -204,7 +207,7 @@ pub struct Ppu<'a> {
 }
 
 impl<'a> Ppu<'a> {
-    pub fn new(mapper: Mapper) -> Ppu<'static> {
+    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Ppu<'static> {
         Ppu {
             mapper: mapper,
 
@@ -249,21 +252,23 @@ impl<'a> Ppu<'a> {
 
     fn read(&self, addr: u16) -> u8 {
         match addr {
-            0x0000...0x1FFF => self.mapper.read(addr),
+            0x0000...0x1FFF => self.mapper.borrow_mut().read(addr),
             0x2000...0x3EFF => self.nt[addr as usize % 0x800],
             0x3F00...0x3F0F => self.image_palette[addr as usize],
             0x3F10...0x3F1F => self.sprite_palette[addr as usize],
             0x3F20...0x3FFF => self.read(((addr - 0x3F00) % 32) + 0x3F00),
+            _ => panic!("Invalid read address {:?}", addr)
         }
     }
 
-    fn write(&self, addr: u16, val: u8) {
+    fn write(&mut self, addr: u16, val: u8) {
         match addr {
-            0x0000...0x1FFF => self.mapper.write(addr, val),
+            0x0000...0x1FFF => self.mapper.borrow_mut().write(addr, val),
             0x2000...0x3EFF => self.nt[addr as usize % 0x800] = val,
             0x3F00...0x3F0F => self.image_palette[addr as usize] = val,
             0x3F10...0x3F1F => self.sprite_palette[addr as usize] = val,
             0x3F20...0x3FFF => self.write(((addr - 0x3F00) % 32) + 0x3F00, val),
+            _ => panic!("Invalid write address {:?}", addr)
         }
     }
 
@@ -357,7 +362,7 @@ impl<'a> Ppu<'a> {
         }
     }
 
-    fn sprite_pixel(&self) -> (usize, u32, Option<&Sprite>) {
+    fn sprite_pixel(&self) -> (usize, u32, Option<Sprite>) {
         if !self.ppu_mask.show_sprites() {
             return (0, 0, None);
         }
@@ -377,13 +382,13 @@ impl<'a> Ppu<'a> {
             if color % 4 == 0 {
                 continue;
             }
-            return (i, color, Some(sprite));
+            return (i, color, Some(**sprite));
         }
         (0, 0, None)
     }
 
     fn sprite_pattern(&self, sprite: &Sprite, mut row: usize) -> u32 {
-        let tile = sprite.tile;
+        let mut tile = sprite.tile;
 
         row = (if self.ppu_ctrl.sprite_size() { 15 } else { 7 } as usize) - row;
 
@@ -417,8 +422,8 @@ impl<'a> Ppu<'a> {
         let mut pattern: u32 = 0;
 
         for _ in 0..7 {
-            let mut a = 0u8;
-            let mut b = 0u8;
+            let mut a;
+            let mut b;
 
             if sprite.attributes.flip_h() {
                 a = (low_tile & 1) << 0;

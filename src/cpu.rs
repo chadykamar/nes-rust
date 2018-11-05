@@ -2,6 +2,9 @@ use bitfield::BitRange;
 use log::Level::Debug;
 use mapper::Mapper;
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 /// Stack offset
 const STACK: u16 = 0x100;
 /// NMI vector
@@ -104,11 +107,11 @@ pub struct Cpu {
     x: u8,
     y: u8,
     p: ProcessorStatus, // The status register is made up of 5 flags and 3 unused bits
-    mapper: Mapper,
+    mapper: Rc<RefCell<Box<Mapper>>>,
 }
 
 impl Cpu {
-    pub fn new(mapper: Mapper) -> Cpu {
+    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Cpu {
         Cpu {
             ram: [0; RAM_SIZE],
             cycles: 0,
@@ -207,7 +210,7 @@ impl Cpu {
         if addr < 0x2000 {
             self.ram[(addr % 0x0800) as usize]
         } else if addr >= 0x6000 {
-            self.mapper.read(addr)
+            self.mapper.borrow_mut().read(addr)
         } else {
             0
         }
@@ -230,7 +233,7 @@ impl Cpu {
         if addr < 0x2000 {
             self.ram[(addr & 0x7FF) as usize] = val;
         } else if addr >= 0x6000 {
-            self.mapper.write(addr, val);
+            self.mapper.borrow_mut().write(addr, val);
         }
     }
 
