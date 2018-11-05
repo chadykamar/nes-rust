@@ -1,12 +1,11 @@
 extern crate nes;
 
-use nes::start;
 use nes::rom::Rom;
+use nes::start;
 
 use std::env;
-use std::path::Path;
 use std::fs::File;
-
+use std::path::Path;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
