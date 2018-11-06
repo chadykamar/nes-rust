@@ -2,8 +2,8 @@ use bitfield::BitRange;
 use log::Level::Debug;
 use mapper::Mapper;
 
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Stack offset
 const STACK: u16 = 0x100;
@@ -237,8 +237,9 @@ impl Cpu {
         }
     }
 
-    fn resolve_address(&mut self, mode_no: usize) -> Option<u16> {
-        match mode_no {
+    /// Resolves the addressing mode for the given `opcode`.
+    fn resolve_address(&mut self, opcode: u8) -> Option<u16> {
+        match INSTRUCTION_MODES[opcode as usize] {
             1 => Some(self.absolute()),
             2 => Some(self.absolute_x()),
             3 => Some(self.absolute_y()),
@@ -256,6 +257,7 @@ impl Cpu {
         }
     }
 
+    /// Executes a CPU instruction
     pub fn step(&mut self) -> isize {
         if self.stall > 0 {
             self.stall -= 1;
@@ -273,13 +275,10 @@ impl Cpu {
 
         let cy = self.cycles;
 
-        // FIXME problme is here, order is wrong, can't get address with wrong pc
-
         let opcode = self.read(self.pc);
         let cycles = INSTRUCTION_CYCLES[opcode as usize];
-        let mode_no = INSTRUCTION_MODES[opcode as usize];
 
-        let addressing_mode = self.resolve_address(mode_no);
+        let addressing_mode = self.resolve_address(opcode);
 
         self.pc += INSTRUCTION_SIZES[opcode as usize] as u16;
         self.cycles += cycles;
@@ -289,6 +288,7 @@ impl Cpu {
         return (self.cycles - cy) as isize;
     }
 
+    /// Logs the current state of the CPU.
     fn trace(&self) {
         let opcode = self.read(self.pc) as usize;
         let bytes = INSTRUCTION_SIZES[opcode];
@@ -387,6 +387,8 @@ impl Cpu {
         (self.read(self.pc + 1) + self.y) as u16 & 0xFF
     }
 
+    /// Executes the instruciton for the given opcode (with the given address
+    /// if applicable).
     fn exec(&mut self, opcode: u8, addr: Option<u16>) {
         match opcode {
             0x69 => self.adc(addr.unwrap()),
@@ -444,7 +446,6 @@ impl Cpu {
             0x94 => self.sty(addr.unwrap()),
             0x8c => self.sty(addr.unwrap()),
 
-            // Comparisons
             0xc9 => {
                 let a = self.a;
                 self.compare(addr.unwrap(), a);
@@ -463,58 +464,47 @@ impl Cpu {
             }
             0xdd => {
                 let a = self.a;
-
                 self.compare(addr.unwrap(), a);
             }
             0xd9 => {
                 let a = self.a;
-
                 self.compare(addr.unwrap(), a);
             }
             0xc1 => {
                 let a = self.a;
-
                 self.compare(addr.unwrap(), a);
             }
             0xd1 => {
                 let a = self.a;
-
                 self.compare(addr.unwrap(), a);
             }
 
             0xe0 => {
                 let x = self.x;
-
                 self.compare(addr.unwrap(), x);
             }
             0xe4 => {
                 let x = self.x;
-
                 self.compare(addr.unwrap(), x);
             }
             0xec => {
                 let x = self.x;
-
                 self.compare(addr.unwrap(), x);
             }
 
             0xc0 => {
                 let y = self.y;
-
                 self.compare(addr.unwrap(), y);
             }
             0xc4 => {
                 let y = self.y;
-
                 self.compare(addr.unwrap(), y);
             }
             0xcc => {
                 let y = self.y;
-
                 self.compare(addr.unwrap(), y);
             }
 
-            // Bitwise operations
             0x29 => self.and(addr.unwrap()),
             0x25 => self.and(addr.unwrap()),
             0x35 => self.and(addr.unwrap()),
