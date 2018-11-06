@@ -7,10 +7,10 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 /// Width of the screen for NTSC systems
-const SCREEN_WIDTH: usize = 256;
+pub const SCREEN_WIDTH: usize = 256;
 
 /// Height of the screen for NTSC systems
-const SCREEN_HEIGHT: usize = 240;
+pub const SCREEN_HEIGHT: usize = 240;
 
 const PALETTE: [u32; 64] = [
     0x666666, 0x002A88, 0x1412A7, 0x3B00A4, 0x5C007E, 0x6E0040, 0x6C0600, 0x561D00, 0x333500,

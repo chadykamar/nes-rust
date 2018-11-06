@@ -17,8 +17,9 @@ use log4rs::encode::pattern::PatternEncoder;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::pixels::Color;
+use sdl2::pixels::{Color, PixelFormatEnum};
 
+pub mod controller;
 pub mod cpu;
 pub mod mapper;
 pub mod ppu;
@@ -30,12 +31,12 @@ pub mod util;
 use cpu::Cpu;
 use mapper::{Mapper, MapperZero};
 use ppu::Ppu;
+use ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use rom::Rom;
 
-use std::borrow::BorrowMut;
+use std::cell::RefCell;
 use std::fs::File;
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Initializes and configures logging using log4rs
@@ -54,8 +55,6 @@ fn init_logging() {
 }
 
 fn sdl_start() {}
-
-fn wasm_start() {}
 
 /// Starts the emulator
 pub fn start(rom: Rom) {
@@ -76,13 +75,15 @@ pub fn start(rom: Rom) {
 
     // TODO initilize mapper from heaader
 
-    let mut mapper: Rc<RefCell<Box<Mapper>>> = Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
+    let mut mapper: Rc<RefCell<Box<Mapper>>> =
+        Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
     let mut cpu = Cpu::new(mapper.clone());
     let mut ppu = Ppu::new(mapper.clone());
 
     cpu.reset();
 
     let sdl_context = sdl2::init().unwrap();
+    sdl_context.mouse().show_cursor(false);
 
     let video_subsystem = sdl_context.video().unwrap();
 
@@ -96,17 +97,23 @@ pub fn start(rom: Rom) {
         .build()
         .unwrap();
 
-    let mut canvas = window.into_canvas().build().unwrap();
+    let mut canvas = window
+        .into_canvas()
+        .accelerated()
+        .present_vsync()
+        .build()
+        .unwrap();
 
-    canvas.set_draw_color(Color::RGB(0, 255, 255));
-    canvas.clear();
-    canvas.present();
+    let texture_creator = canvas.texture_creator();
 
-    let mut i = 0;
+    let mut texture = texture_creator
+        .create_texture_streaming(
+            PixelFormatEnum::RGB24,
+            SCREEN_WIDTH as u32,
+            SCREEN_HEIGHT as u32,
+        ).unwrap();
+
     'running: loop {
-        i = (i + 1) % 255;
-        canvas.set_draw_color(Color::RGB(i, 64, 255 - i));
-        canvas.clear();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -117,6 +124,7 @@ pub fn start(rom: Rom) {
                 _ => {}
             }
         }
+        canvas.present();
         let cpu_cycles = cpu.step();
 
         for _ in 0..cpu_cycles {
@@ -132,8 +140,8 @@ mod tests {
     use File;
 
     use Cpu;
-    use {Mapper, MapperZero};
     use Rom;
+    use {Mapper, MapperZero};
 
     #[test]
     fn golden_log() {
