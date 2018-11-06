@@ -28,8 +28,8 @@ pub mod rom;
 #[macro_use]
 pub mod util;
 
-use cpu::Cpu;
 use controller::Controller;
+use cpu::Cpu;
 use mapper::{Mapper, MapperZero};
 use ppu::Ppu;
 use ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -127,7 +127,10 @@ pub fn start(rom: Rom) {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
-                Event::KeyDown { keycode: Some(keycode), .. } => match keycode {
+                Event::KeyDown {
+                    keycode: Some(keycode),
+                    ..
+                } => match keycode {
                     Keycode::Z => controller.borrow_mut().buttons.set_a(true),
                     Keycode::X => controller.borrow_mut().buttons.set_b(true),
                     Keycode::Backspace => controller.borrow_mut().buttons.set_select(true),
@@ -137,8 +140,11 @@ pub fn start(rom: Rom) {
                     Keycode::Left => controller.borrow_mut().buttons.set_left(true),
                     Keycode::Right => controller.borrow_mut().buttons.set_right(true),
                     _ => {}
-                }
-                Event::KeyUp { keycode: Some(keycode), .. } => match keycode {
+                },
+                Event::KeyUp {
+                    keycode: Some(keycode),
+                    ..
+                } => match keycode {
                     Keycode::Z => controller.borrow_mut().buttons.set_a(false),
                     Keycode::X => controller.borrow_mut().buttons.set_b(false),
                     Keycode::Backspace => controller.borrow_mut().buttons.set_select(false),
@@ -148,8 +154,7 @@ pub fn start(rom: Rom) {
                     Keycode::Left => controller.borrow_mut().buttons.set_left(false),
                     Keycode::Right => controller.borrow_mut().buttons.set_right(false),
                     _ => {}
-
-                }
+                },
                 _ => {}
             }
         }
@@ -159,14 +164,21 @@ pub fn start(rom: Rom) {
         for _ in 0..cpu_cycles {
             ppu.step();
         }
+
+        texture
+            .update(None, &ppu.screen, SCREEN_WIDTH as usize * 3)
+            .unwrap();
+        canvas.clear();
+        canvas.copy(&texture, None, None).unwrap();
+        canvas.present();
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
     use std::io::{BufRead, BufReader};
     use std::path::Path;
-    use std::cell::RefCell;
     use std::rc::Rc;
     use File;
 
@@ -179,7 +191,8 @@ mod tests {
     fn golden_log() {
         let path = Path::new("test_roms/nestest.nes");
         let rom = Rom::load(&mut File::open(&path).unwrap()).unwrap();
-        let mut mapper: Rc<RefCell<Box<Mapper>>> = Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
+        let mut mapper: Rc<RefCell<Box<Mapper>>> =
+            Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
         let controller = Rc::new(RefCell::new(Controller::new()));
         let mut cpu = Cpu::new(mapper, controller);
 
