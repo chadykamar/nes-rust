@@ -29,6 +29,7 @@ pub mod rom;
 pub mod util;
 
 use cpu::Cpu;
+use controller::Controller;
 use mapper::{Mapper, MapperZero};
 use ppu::Ppu;
 use ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -75,9 +76,14 @@ pub fn start(rom: Rom) {
 
     // TODO initilize mapper from heaader
 
+    // FIXME Refactor to not use RefCell if possible
+
     let mut mapper: Rc<RefCell<Box<Mapper>>> =
         Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
-    let mut cpu = Cpu::new(mapper.clone());
+
+    let mut controller = Rc::new(RefCell::new(Controller::new()));
+
+    let mut cpu = Cpu::new(mapper.clone(), controller.clone());
     let mut ppu = Ppu::new(mapper.clone());
 
     cpu.reset();
@@ -121,6 +127,29 @@ pub fn start(rom: Rom) {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
+                Event::KeyDown { keycode: Some(keycode), .. } => match keycode {
+                    Keycode::Z => controller.borrow_mut().buttons.set_a(true),
+                    Keycode::X => controller.borrow_mut().buttons.set_b(true),
+                    Keycode::Backspace => controller.borrow_mut().buttons.set_select(true),
+                    Keycode::Return => controller.borrow_mut().buttons.set_start(true),
+                    Keycode::Up => controller.borrow_mut().buttons.set_up(true),
+                    Keycode::Down => controller.borrow_mut().buttons.set_down(true),
+                    Keycode::Left => controller.borrow_mut().buttons.set_left(true),
+                    Keycode::Right => controller.borrow_mut().buttons.set_right(true),
+                    _ => {}
+                }
+                Event::KeyUp { keycode: Some(keycode), .. } => match keycode {
+                    Keycode::Z => controller.borrow_mut().buttons.set_a(false),
+                    Keycode::X => controller.borrow_mut().buttons.set_b(false),
+                    Keycode::Backspace => controller.borrow_mut().buttons.set_select(false),
+                    Keycode::Return => controller.borrow_mut().buttons.set_start(false),
+                    Keycode::Up => controller.borrow_mut().buttons.set_up(false),
+                    Keycode::Down => controller.borrow_mut().buttons.set_down(false),
+                    Keycode::Left => controller.borrow_mut().buttons.set_left(false),
+                    Keycode::Right => controller.borrow_mut().buttons.set_right(false),
+                    _ => {}
+
+                }
                 _ => {}
             }
         }
@@ -137,20 +166,24 @@ pub fn start(rom: Rom) {
 mod tests {
     use std::io::{BufRead, BufReader};
     use std::path::Path;
+    use std::cell::RefCell;
+    use std::rc::Rc;
     use File;
 
+    use Controller;
     use Cpu;
     use Rom;
     use {Mapper, MapperZero};
 
     #[test]
     fn golden_log() {
-        let path = Path::new("roms/nestest.nes");
+        let path = Path::new("test_roms/nestest.nes");
         let rom = Rom::load(&mut File::open(&path).unwrap()).unwrap();
-        let mapper = MapperZero::new(rom);
-        let mut cpu = Cpu::new(mapper);
+        let mut mapper: Rc<RefCell<Box<Mapper>>> = Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
+        let controller = Rc::new(RefCell::new(Controller::new()));
+        let mut cpu = Cpu::new(mapper, controller);
 
-        let file = File::open("roms/nestest.log").unwrap();
+        let file = File::open("test_roms/nestest.log").unwrap();
         let buf_reader = BufReader::new(file);
         for (i, line) in buf_reader.lines().enumerate() {
             println!("{:?}", i + 1);
