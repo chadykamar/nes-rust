@@ -1,4 +1,5 @@
 use bitfield::BitRange;
+use controller::Controller;
 use log::Level::Debug;
 use mapper::Mapper;
 
@@ -108,10 +109,11 @@ pub struct Cpu {
     y: u8,
     p: ProcessorStatus, // The status register is made up of 5 flags and 3 unused bits
     mapper: Rc<RefCell<Box<Mapper>>>,
+    controller: Rc<RefCell<Controller>>,
 }
 
 impl Cpu {
-    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Cpu {
+    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>, controller: Rc<RefCell<Controller>>) -> Cpu {
         Cpu {
             ram: [0; RAM_SIZE],
             cycles: 0,
@@ -124,6 +126,7 @@ impl Cpu {
             y: 0,
             p: ProcessorStatus(0x24),
             mapper: mapper,
+            controller: controller,
         }
     }
 
@@ -211,6 +214,8 @@ impl Cpu {
             self.ram[(addr % 0x0800) as usize]
         } else if addr >= 0x6000 {
             self.mapper.borrow_mut().read(addr)
+        } else if addr == 0x4016 {
+            self.controller.borrow_mut().read()
         } else {
             0
         }
@@ -234,6 +239,8 @@ impl Cpu {
             self.ram[(addr & 0x7FF) as usize] = val;
         } else if addr >= 0x6000 {
             self.mapper.borrow_mut().write(addr, val);
+        } else if addr == 0x4016 {
+            self.controller.borrow_mut().write(val);
         }
     }
 
