@@ -38,12 +38,10 @@ impl Rom {
             magic: [header[0], header[1], header[2], header[3]],
             prg_rom_size: header[4],
             chr_rom_size: header[5],
-            flags_6: header[6],
-            flags_7: header[7],
+            control_byte_1: header[6],
+            control_byte_2: header[7],
             prg_ram_size: header[8],
-            flags_9: header[9],
-            flags_10: header[10],
-            zero: [0; 5],
+            zero: [0; 7],
         };
 
         if header.magic != *b"NES\x1a" {
@@ -68,11 +66,18 @@ impl Rom {
 }
 
 pub struct INesHeader {
-    /// 'N' 'E' 'S' '\x1a'
+    /// Should contain 'N' 'E' 'S' '\x1a' to identify the file as an iNES file.
     pub magic: [u8; 4],
-    /// number of 16K units of PRG-ROM
+    /// Number of 16 KB PRG-ROM banks.
+    ///
+    /// The PRG-ROM (Program ROM) is the area of ROM used to store the program
+    /// code.
     pub prg_rom_size: u8,
-    /// number of 8K units of CHR-ROM
+    /// Number of 8 KB CHR-ROM / VROM banks.
+    ///
+    /// The names CHR-ROM (Character ROM)
+    /// and VROM are used synonymously to refer to the area of ROM used to
+    /// store graphics information, the pattern tables.
     pub chr_rom_size: u8,
     /// MMMMATPA
     ///
@@ -82,39 +87,36 @@ pub struct INesHeader {
     ///      1xxx: four-screen VRAM
     /// * T: ROM contains a trainer
     /// * P: Cartridge has persistent memory
-    pub flags_6: u8,
+    pub control_byte_1: u8,
     /// MMMMVVPU
     ///
     /// * M: High nibble of mapper number
     /// * V: If 0b10, all following flags are in NES 2.0 format
     /// * P: ROM is for the PlayChoice-10
     /// * U: ROM is for VS Unisystem
-    pub flags_7: u8,
-    /// number of 8K units of PRG-RAM
-    pub prg_ram_size: u8,
-    /// RRRRRRRT
+    pub control_byte_2: u8,
+    /// Number of 8 KB RAM banks.
     ///
-    /// * R: Reserved (= 0)
-    /// * T: 0 for NTSC, 1 for PAL
-    pub flags_9: u8,
-    pub flags_10: u8,
+    /// For compatibility with previous versions of the iNES format, we assume
+    /// 1 page of RAM when this is 0.
+    pub prg_ram_size: u8,
     /// always zero
-    pub zero: [u8; 5],
+    pub zero: [u8; 7],
 }
 
 impl INesHeader {
     /// Returns the mapper ID.
     pub fn mapper(&self) -> u8 {
-        (self.flags_7 & 0xf0) | (self.flags_6 >> 4)
+        (self.control_byte_2 & 0xf0) | (self.control_byte_1 >> 4)
     }
 
     /// Returns the low nibble of the mapper ID.
     pub fn ines_mapper(&self) -> u8 {
-        self.flags_6 >> 4
+        self.control_byte_1 >> 4
     }
 
     pub fn trainer(&self) -> bool {
-        (self.flags_6 & 0x04) != 0
+        (self.control_byte_1 & 0x04) != 0
     }
 }
 
