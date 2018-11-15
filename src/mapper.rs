@@ -1,5 +1,13 @@
 use rom::Rom;
 
+
+pub fn init(rom: Rom) -> impl Mapper {
+    match rom.header.mapper() {
+        0 => MapperZero::new(rom),
+    }
+
+}
+
 pub trait Mapper {
     fn read(&self, addr: u16) -> u8;
     fn write(&mut self, addr: u16, val: u8);
