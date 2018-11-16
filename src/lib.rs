@@ -191,8 +191,8 @@ mod tests {
     fn golden_log() {
         let path = Path::new("test_roms/nestest.nes");
         let rom = Rom::load(&mut File::open(&path).unwrap()).unwrap();
-        let mut mapper: Rc<RefCell<Box<Mapper>>> =
-            Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
+        let mapper: Box<Mapper> = Box::new(MapperZero::new(rom));
+        let mapper = Rc::new(RefCell::new(mapper));
         let controller = Rc::new(RefCell::new(Controller::new()));
         let mut cpu = Cpu::new(mapper, controller);
 

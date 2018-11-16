@@ -171,8 +171,14 @@ pub struct Ppu<'a> {
     cycle: usize,
     frame: usize,
     pub screen: [u8; SCREEN_WIDTH * SCREEN_HEIGHT * 3],
-    vram_addr: u16,
-    temp_vram_addr: u16,
+    /// Current VRAM address (15 bits)
+    v: u16,
+    /// Temporary VRAM address (15 bits)
+    t: u16,
+    /// Fine x scroll (3 bits)
+    x: u8,
+    /// First or second write toggle (1 bit)
+    w: bool,
 
 
     /// Object Attribute Memory which contains a display list of up to 64
@@ -199,15 +205,16 @@ pub struct Ppu<'a> {
     
 
     // Flags
-    /// Write toggle.
-    write: bool,
     /// Even (true) or odd (false)
     even: bool,
+    /// 
+    nmi_occured: bool,
+    nmi_output: bool,
 
     // Temporary variables
     // TODO: Refactor
-    nametable: u8,
-    attribute_table: u8,
+    nametable_byte: u8,
+    attribute_table_byte: u8,
     low_tile: u8,
     high_tile: u8,
     tile_data: usize,
@@ -257,16 +264,19 @@ impl<'a> Ppu<'a> {
                 attributes: SpriteAttributes(0),
             }; 64],
             secondary_oam: vec![],
-            nametable: 0,
-            vram_addr: 0,
-            temp_vram_addr: 0,
-            attribute_table: 0,
+            nametable_byte: 0,
+            v: 0,
+            t: 0,
+            x: 0,
+            w: false,
+            attribute_table_byte: 0,
             low_tile: 0,
             high_tile: 0,
             tile_data: 0,
 
             even: true,
-            write: true,
+            nmi_occured: false,
+            nmi_output: false,
 
             ppu_ctrl: PpuCtrl(0),
             ppu_mask: PpuMask(0),
@@ -302,9 +312,13 @@ impl<'a> Ppu<'a> {
         }
     }
 
-    pub fn read_register(&self, addr: u16) -> u8 {
+    pub fn read_register(&mut self, addr: u16) -> u8 {
         match addr {
-            0x2002 => self.ppu_status.bit_range(7, 0),
+            0x2002 => {
+                self.ppu_status.set_vblank_started(self.nmi_occured);
+                self.nmi_occured = false;
+                self.ppu_status.bit_range(7, 0)
+            }
             0x2004 => self.oam_data.bit_range(7, 0),
             0x2007 => self.ppu_data.bit_range(7, 0),
             _ => panic!("{:?} is not a readable register.", addr),
@@ -313,12 +327,25 @@ impl<'a> Ppu<'a> {
 
     pub fn write_register(&mut self, addr: u16, val: u8) {
         match addr {
-            0x2000 => self.ppu_ctrl.set_bit_range(7, 0, val),
+            0x2000 => {
+                self.nmi_output = self.ppu_ctrl.nmi_vblank();
+                self.ppu_ctrl.set_bit_range(7, 0, val)
+            },
             0x2001 => self.ppu_mask.set_bit_range(7, 0, val),
             0x2003 => self.oam_addr = val,
             0x2004 => self.oam_data = val,
             0x2005 => self.ppu_scroll = val,
-            0x2006 => self.ppu_addr = val,
+            0x2006 => {
+                if self.w {
+                    self.t = (self.t & 0xFF00) | val as u16;
+                    self.v = self.t;
+                    self.w = false;
+
+                } else {
+                    self.t = (self.t & 0x80FF) | ((val as u16 & 0x3F) << 8);
+                    self.w = true;
+                }
+            }
             0x2007 => self.ppu_data = val,
             0x4014 => self.oam_dma = val,
             _ => panic!("{:?} is not a register!", addr),
@@ -518,6 +545,8 @@ impl<'a> Ppu<'a> {
 
     }
 
+
+
     pub fn step(&mut self) {
         // TODO NMI and VBLANK
         self.tick();
@@ -537,31 +566,31 @@ impl<'a> Ppu<'a> {
                 self.tile_data <<= 4;
                 match self.cycle % 8 {
                     1 => {
-                        let addr = 0x2000 | (self.vram_addr & 0x0FFF);
-                        self.nametable = self.read_register(addr);
+                        let addr = 0x2000 | (self.v & 0x0FFF);
+                        self.nametable_byte = self.read_register(addr);
                     }
                     3 => {
-                        let a = self.vram_addr;
+                        let a = self.v;
                         let addr = 0x23C0 | (a & 0x0C00) | ((a >> 4) & 0x38) | ((a >> 2) & 0x07);
                         let shift = ((a >> 4) & 4) | (a & 2);
-                        self.attribute_table = ((self.read_register(addr) >> shift) & 3) << 2;
+                        self.attribute_table_byte = ((self.read_register(addr) >> shift) & 3) << 2;
                     }
                     5 => {
-                        let fine_y = (self.vram_addr >> 12) & 7;
+                        let fine_y = (self.v >> 12) & 7;
                         let table = self.ppu_ctrl.background_pattern_table_addr() as u16;
-                        let addr = 0x1000 * table + self.nametable as u16 * 16 + fine_y;
+                        let addr = 0x1000 * table + self.nametable_byte as u16 * 16 + fine_y;
                         self.low_tile = self.read_register(addr);
                     }
                     7 => {
-                        let fine_y = (self.vram_addr >> 12) & 7;
+                        let fine_y = (self.v >> 12) & 7;
                         let table = self.ppu_ctrl.background_pattern_table_addr() as u16;
-                        let addr = 0x1000 * table + self.nametable as u16 * 16 + fine_y;
+                        let addr = 0x1000 * table + self.nametable_byte as u16 * 16 + fine_y;
                         self.high_tile = self.read_register(addr + 8);
                     }
                     0 => {
                         let mut data: usize = 0;
                         for _ in 0..8 {
-                            let a = self.attribute_table;
+                            let a = self.attribute_table_byte;
                             let low = (self.low_tile & 0x80) >> 7;
                             let high = (self.high_tile & 0x80) >> 6;
                             self.low_tile <<= 1;
@@ -575,55 +604,52 @@ impl<'a> Ppu<'a> {
                 }
             }
             if pre_render_line && 280 <= self.cycle && self.cycle <= 304 {
-                self.vram_addr = (self.vram_addr & 0x841F) | (self.temp_vram_addr & 0x7BE0);
+                self.v = (self.v & 0x841F) | (self.t & 0x7BE0);
             }
 
             if pre_render_line || visible_line {
                 if pre_fetch_cycle && self.cycle % 8 == 0 {
-                    if self.vram_addr & 0x001F == 31 {
-                        self.vram_addr &= 0xFFE0;
-                        self.vram_addr ^= 0x0400;
+                    if self.v & 0x001F == 31 {
+                        self.v &= 0xFFE0;
+                        self.v ^= 0x0400;
                     } else {
-                        self.vram_addr += 1;
+                        self.v += 1;
                     }
                 }
                 if self.cycle == 256 {
-                    if self.vram_addr & 0x7000 != 0x7000 {
-                        self.vram_addr += 0x1000
+                    if self.v & 0x7000 != 0x7000 {
+                        self.v += 0x1000
                     } else {
-                        self.vram_addr &= 0x8FFF;
-                        let mut y = (self.vram_addr & 0x03E0) >> 5;
+                        self.v &= 0x8FFF;
+                        let mut y = (self.v & 0x03E0) >> 5;
                         if y == 29 {
                             y = 0;
-                            self.vram_addr ^= 0x0800;
+                            self.v ^= 0x0800;
                         } else if y == 31 {
                             y = 0;
                         } else {
                             y += 1;
                         }
-                        self.vram_addr = (self.vram_addr & 0xFC1F) | (y << 5);
+                        self.v = (self.v & 0xFC1F) | (y << 5);
                     }
                 }
                 if self.cycle == 257 {
-                    self.vram_addr = (self.vram_addr & 0xFBE0) | (self.temp_vram_addr & 0x041F);
+                    self.v = (self.v & 0xFBE0) | (self.t & 0x041F);
                 }
             }
         }
 
-        if self.ppu_mask.show_sprites() {
-            if self.cycle == 257 {
-                if visible_line {
-                    self.evaluate_sprites();
-                } else {
-                    // Sprites
-
-                }
-            }
+        if self.ppu_mask.show_sprites() && self.cycle == 257 && visible_line {
+            self.evaluate_sprites();
         }
 
         // vblank
-        if self.scanline == 241 && self.cycle == 1 {}
-        if self.scanline == 261 && self.cycle == 1 {
+        if self.scanline == 241 && self.cycle == 1 {
+            self.nmi_occured = true;
+
+        }
+        if pre_render_line && self.cycle == 1 {
+            self.nmi_occured = false;
             self.ppu_status.set_sprite_zero_hit(false);
             self.ppu_status.set_sprite_overflow(false);
         }
