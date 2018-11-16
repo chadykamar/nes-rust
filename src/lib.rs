@@ -77,11 +77,11 @@ pub fn start(rom: Rom) {
     // TODO initilize mapper from heaader
 
     // FIXME Refactor to not use RefCell if possible
+    let mapper = mapper::init(rom);
 
-    let mut mapper: Rc<RefCell<Box<Mapper>>> =
-        Rc::new(RefCell::new(Box::new(MapperZero::new(rom))));
+    let mapper = Rc::new(RefCell::new(mapper));
 
-    let mut controller = Rc::new(RefCell::new(Controller::new()));
+    let controller = Rc::new(RefCell::new(Controller::new()));
 
     let mut cpu = Cpu::new(mapper.clone(), controller.clone());
     let mut ppu = Ppu::new(mapper.clone());
@@ -93,7 +93,7 @@ pub fn start(rom: Rom) {
 
     let video_subsystem = sdl_context.video().unwrap();
 
-    let audio_subsystem = sdl_context.audio().unwrap();
+    // let audio_subsystem = sdl_context.audio().unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 

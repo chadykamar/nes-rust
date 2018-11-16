@@ -12,17 +12,6 @@ pub const SCREEN_WIDTH: usize = 256;
 /// Height of the screen for NTSC systems
 pub const SCREEN_HEIGHT: usize = 240;
 
-// const PALETTE: [u32; 64] = [
-//     0x666666, 0x002A88, 0x1412A7, 0x3B00A4, 0x5C007E, 0x6E0040, 0x6C0600, 0x561D00, 0x333500,
-//     0x0B4800, 0x005200, 0x004F08, 0x00404D, 0x000000, 0x000000, 0x000000, 0xADADAD, 0x155FD9,
-//     0x4240FF, 0x7527FE, 0xA01ACC, 0xB71E7B, 0xB53120, 0x994E00, 0x6B6D00, 0x388700, 0x0C9300,
-//     0x008F32, 0x007C8D, 0x000000, 0x000000, 0x000000, 0xFFFEFF, 0x64B0FF, 0x9290FF, 0xC676FF,
-//     0xF36AFF, 0xFE6ECC, 0xFE8170, 0xEA9E22, 0xBCBE00, 0x88D800, 0x5CE430, 0x45E082, 0x48CDDE,
-//     0x4F4F4F, 0x000000, 0x000000, 0xFFFEFF, 0xC0DFFF, 0xD3D2FF, 0xE8C8FF, 0xFBC2FF, 0xFEC4EA,
-//     0xFECCC5, 0xF7D8A5, 0xE4E594, 0xCFEF96, 0xBDF4AB, 0xB3F3CC, 0xB5EBF2, 0xB8B8B8, 0x000000,
-//     0x000000,
-// ];
-
 pub const PALETTE: [u8; 192] = [
     0x7C, 0x7C, 0x7C, 0x00, 0x00, 0xFC, 0x00, 0x00, 0xBC, 0x44, 0x28, 0xBC, 0x94, 0x00, 0x84, 0xA8,
     0x00, 0x20, 0xA8, 0x10, 0x00, 0x88, 0x14, 0x00, 0x50, 0x30, 0x00, 0x00, 0x78, 0x00, 0x00, 0x68,
@@ -37,13 +26,6 @@ pub const PALETTE: [u8; 192] = [
     0xA4, 0xC0, 0xF0, 0xD0, 0xB0, 0xFC, 0xE0, 0xA8, 0xF8, 0xD8, 0x78, 0xD8, 0xF8, 0x78, 0xB8, 0xF8,
     0xB8, 0xB8, 0xF8, 0xD8, 0x00, 0xFC, 0xFC, 0xF8, 0xD8, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 ];
-
-// struct Sprite {
-//     position: u8,
-//     pattern: u8,
-//     priority: u8,
-//     index: u8,
-// }
 
 bitfield!{
     /// Byte 2 of a `Sprite`
@@ -99,28 +81,61 @@ struct Sprite {
 
 ///
 bitfield!{
+    /// The PPUSCTRL register
     struct PpuCtrl(u8);
     impl Debug;
+
+    /// Base nametable address (0 = $2000; 1 = $2400; 2 = $2800; 3 = $2C00)
     pub base_nametable_addr, set_base_nametable_addr: 1, 0;
+    /// VRAM address increment per CPU read/write of PPUDATA
+    /// (0: add 1, going across; 1: add 32, going down)
     pub vram_addr_incr, set_vram_addr_incr: 2;
+    /// Sprite pattern table address for 8x8 sprites (0: $0000; 1: $1000; 
+    /// ignored in 8x16 mode)
     pub sprite_pattern_table_addr, set_sprite_pattern_table_addr: 3;
+    /// Background pattern table address (0: $0000; 1: $1000)
     pub background_pattern_table_addr, set_background_pattern_table_addr: 4;
+    /// Sprite size (0: 8x8 pixels; 1: 8x16 pixels)
     pub sprite_size, set_sprite_size: 5;
+    /// PPU Master/Slave select (0: read backdrop from EXT pins; 1: output
+    /// color on EXT pins)
     pub master_slave_select, set_master_slave_select: 6;
-    pub nmi_vblank, set_n: 7;
+    /// Generate an NMI at the start of the vertical blanking interval
+    /// (0: off, 1: on)
+    /// 
+    /// Vblank is the time between the end of the final line of a frame and the
+    /// beginning of the first line of the next frame.
+    pub nmi_vblank, set_nmi_vblank: 7;
 }
 
-/// The
 bitfield!{
+    /// The PPUMASK register
     struct PpuMask(u8);
     impl Debug;
+    /// Greyscale (0: normal color, 1: produce a greyscale display)
     pub grayscale, set_grayscale: 0;
+    // 1: Show background in leftmost 8 pixels of screen, 0: Hide
     pub show_background_left, set_show_background_left: 1;
+    /// 1: Show sprites in leftmost 8 pixels of screen, 0: Hide
     pub show_sprites_left, set_show_sprites_left: 2;
+    /// 1: Show background, 0: Hide background
     pub show_background, set_show_background: 3;
+    /// 1: Show sprites, 0: Hide sprites
     pub show_sprites, set_show_sprites: 4;
+    /// Emphasize red. 
+    /// 
+    /// Note that the emphasis bits are applied independently of bit 0, so they
+    /// will still tint the color of the grey image.
     pub emphasize_red, set_emphasize_red: 5;
+    /// Emphasize green
+    /// 
+    /// Note that the emphasis bits are applied independently of bit 0, so they
+    /// will still tint the color of the grey image.
     pub emphasize_green, set_emphasize_green: 6;
+    /// Emphasize blue
+    /// 
+    /// Note that the emphasis bits are applied independently of bit 0, so they
+    /// will still tint the color of the grey image.
     pub emphasize_blue, set_emphasize_blue: 7;
 }
 
@@ -159,10 +174,11 @@ pub struct Ppu<'a> {
     vram_addr: u16,
     temp_vram_addr: u16,
 
-    // Mem'
+
     /// Object Attribute Memory which contains a display list of up to 64
     /// sprites, where each sprite's information occupies 4 bytes.
     primary_oam: [&'a Sprite; 64],
+    /// Secondary OAM contains 
     secondary_oam: Vec<(&'a Sprite, usize)>,
 
     nt: [u8; 0x800],
@@ -225,7 +241,6 @@ impl<'a> Ppu<'a> {
     pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Ppu<'static> {
         Ppu {
             mapper: mapper,
-
             scanline: 0,
             cycle: 0,
             frame: 0,
@@ -491,7 +506,6 @@ impl<'a> Ppu<'a> {
         };
         let addr = (color as u16) % 64;
         let index = self.read(((addr - 0x3F00) % 32) + 0x3F00) as usize;
-        println!("{}", index);
         let r = PALETTE[index as usize * 3 + 2];
         let g = PALETTE[index as usize * 3 + 1];
         let b = PALETTE[index as usize * 3 + 0];
@@ -499,6 +513,8 @@ impl<'a> Ppu<'a> {
         self.screen[(y * SCREEN_WIDTH + x) * 3 + 0] = r;
         self.screen[(y * SCREEN_WIDTH + x) * 3 + 1] = g;
         self.screen[(y * SCREEN_WIDTH + x) * 3 + 2] = b;
+
+        println!("{} {} {}", r, g, b);
 
     }
 
@@ -508,7 +524,6 @@ impl<'a> Ppu<'a> {
         let pre_render_line = self.scanline == 261;
         let visible_line = self.scanline < 240;
 
-        println!("cycle: {}, scanline: {}", self.cycle, self.scanline);
 
         let pre_fetch_cycle = 321 <= self.cycle && self.cycle <= 336;
         let visible_cycle = 1 <= self.cycle && self.cycle <= 256;

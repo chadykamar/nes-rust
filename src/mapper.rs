@@ -1,9 +1,10 @@
 use rom::Rom;
 
 
-pub fn init(rom: Rom) -> impl Mapper {
+pub fn init(rom: Rom) -> Box<Mapper> {
     match rom.header.mapper() {
-        0 => MapperZero::new(rom),
+        0 => Box::new(MapperZero::new(rom)),
+        id @ _ => panic!("Unimplemented mapper {}", id),
     }
 
 }

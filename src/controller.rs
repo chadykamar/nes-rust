@@ -1,6 +1,5 @@
 use bitfield::{Bit, BitRange};
 
-
 bitfield!{
     /// Represents the statuses of the buttons. Every button is represented by
     /// one bit with
@@ -15,6 +14,7 @@ bitfield!{
     pub left, set_left: 6;
     pub right, set_right: 7;
 }
+
 /// The main Controller structure.
 pub struct Controller {
     /// A bitfield representing the current status of the controller.
@@ -23,15 +23,12 @@ pub struct Controller {
     /// The index of the next bit (button) to be read
     index: u8,
 
-    /// 
+    ///
     strobe: u8,
 }
 
-
-
 impl Controller {
-
-    /// Initialize 
+    /// Initialize
     pub fn new() -> Controller {
         Controller {
             buttons: Buttons(0),
