@@ -366,11 +366,11 @@ impl Cpu {
     }
 
     fn indirect_indexed(&mut self) -> u16 {
-        let addr = self.read(self.pc + 1) as u16 + self.y as u16;
-        if Cpu::check_same_page(addr - self.y as u16, addr) {
+        let addr = self.read16_wrap(u16::from(self.read(self.pc + 1))) + u16::from(self.y);
+        if Cpu::check_same_page(addr - u16::from(self.y), addr) {
             self.cycles += 1;
         }
-        self.read16_wrap(addr)
+        addr
     }
 
     fn relative(&self) -> u16 {
