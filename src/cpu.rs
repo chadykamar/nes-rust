@@ -18,8 +18,8 @@ const IRQ_BRK_VECTOR: u16 = 0xFFFE;
 /// Ram Size
 const RAM_SIZE: usize = 0x800;
 
-/// Instruction mode corresponding to the variants of the AddressingMode enum
-const INSTRUCTION_MODES: [usize; 256] = [
+/// Instruction mode corresponding to each opcode as resolved by the `resolve_address` function.
+static INSTRUCTION_MODES: [usize; 256] = [
     6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1, 10, 9, 6, 9, 12, 12, 12, 12, 6, 3, 6, 3, 2,
     2, 2, 2, 1, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1, 10, 9, 6, 9, 12, 12, 12, 12, 6, 3,
     6, 3, 2, 2, 2, 2, 6, 7, 6, 7, 11, 11, 11, 11, 6, 5, 4, 5, 1, 1, 1, 1, 10, 9, 6, 9, 12, 12, 12,
@@ -32,7 +32,7 @@ const INSTRUCTION_MODES: [usize; 256] = [
 ];
 
 /// The number of bytes of each instruction in bytes
-const INSTRUCTION_SIZES: [usize; 256] = [
+static INSTRUCTION_SIZES: [usize; 256] = [
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     3, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
@@ -43,7 +43,7 @@ const INSTRUCTION_SIZES: [usize; 256] = [
     2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
 ];
 
-const INSTRUCTION_CYCLES: [usize; 256] = [
+static INSTRUCTION_CYCLES: [usize; 256] = [
     7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6, 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
     6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 4, 4, 6, 6, 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
     6, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 3, 4, 6, 6, 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
@@ -54,7 +54,28 @@ const INSTRUCTION_CYCLES: [usize; 256] = [
     2, 6, 2, 8, 3, 3, 5, 5, 2, 2, 2, 2, 4, 4, 6, 6, 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
 ];
 
-const INSTRUCTION_NAMES: [&str; 256] = [
+/// The number of cycles used by each instruction when a page is crossed
+static CYCLES_PAGE_CROSS: [usize; 256] = [
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+];
+
+/// Name of the instruction
+static INSTRUCTION_NAMES: [&str; 256] = [
     "BRK", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "PHP", "ORA", "ASL", "ANC", "NOP",
     "ORA", "ASL", "SLO", "BPL", "ORA", "KIL", "SLO", "NOP", "ORA", "ASL", "SLO", "CLC", "ORA",
     "NOP", "SLO", "NOP", "ORA", "ASL", "SLO", "JSR", "AND", "KIL", "RLA", "BIT", "AND", "ROL",
@@ -97,7 +118,7 @@ bitfield!{
 
 /// The CPU struct
 pub struct Cpu {
-    ram: [u8; RAM_SIZE],
+    pub ram: [u8; RAM_SIZE],
     cycles: usize, // Cycles remaining
     stall: usize,  // Cycles to stall the CPU for (for catch-up)
     interrupt: Interrupt,
@@ -185,13 +206,13 @@ impl Cpu {
 
     fn push(&mut self, val: u8) {
         let sp = self.sp;
-        self.write(STACK | (sp as u16), val);
+        self.write(STACK | u16::from(sp), val);
         self.sp -= 1;
     }
 
     fn pull(&mut self) -> u8 {
         self.sp += 1;
-        self.read(STACK | (self.sp as u16))
+        self.read(STACK | u16::from(self.sp))
     }
 
     fn pull16(&mut self) -> u16 {
@@ -217,13 +238,13 @@ impl Cpu {
         } else if addr == 0x4016 {
             self.controller.borrow_mut().read()
         } else {
-            0
+            unimplemented!()
         }
     }
 
     fn read16(&self, addr: u16) -> u16 {
-        let low = self.read(addr) as u16;
-        let high = self.read(addr + 1) as u16;
+        let low = u16::from(self.read(addr));
+        let high = u16::from(self.read(addr + 1));
         (high << 8) | low
     }
 
@@ -236,7 +257,7 @@ impl Cpu {
     /// Writes a byte to memory
     fn write(&mut self, addr: u16, val: u8) {
         if addr < 0x2000 {
-            self.ram[(addr & 0x7FF) as usize] = val;
+            self.ram[(addr % 0x800) as usize] = val;
         } else if addr >= 0x6000 {
             self.mapper.borrow_mut().write(addr, val);
         } else if addr == 0x4016 {
@@ -248,14 +269,14 @@ impl Cpu {
     fn resolve_address(&mut self, opcode: u8) -> Option<u16> {
         match INSTRUCTION_MODES[opcode as usize] {
             1 => Some(self.absolute()),
-            2 => Some(self.absolute_x()),
-            3 => Some(self.absolute_y()),
+            2 => Some(self.absolute_x(opcode)),
+            3 => Some(self.absolute_y(opcode)),
             4 => None,
             5 => Some(self.immediate()),
             6 => None,
             7 => Some(self.indexed_indirect()),
             8 => Some(self.indirect()),
-            9 => Some(self.indirect_indexed()),
+            9 => Some(self.indirect_indexed(opcode)),
             10 => Some(self.relative()),
             11 => Some(self.zero_page()),
             12 => Some(self.zero_page_x()),
@@ -292,7 +313,7 @@ impl Cpu {
 
         self.exec(opcode, addressing_mode);
 
-        return (self.cycles - cy) as isize;
+        (self.cycles - cy) as isize
     }
 
     /// Logs the current state of the CPU.
@@ -336,20 +357,20 @@ impl Cpu {
         self.read16(self.pc + 1)
     }
 
-    fn absolute_x(&mut self) -> u16 {
-        let addr = self.read16(self.pc + 1) + self.x as u16;
-        if Cpu::check_same_page(addr - self.x as u16, addr) {
-            self.cycles += 1;
+    fn absolute_x(&mut self, opcode: u8) -> u16 {
+        let addr = self.read16(self.pc + 1) + u16::from(self.x);
+        if Cpu::check_same_page(addr - u16::from(self.x), addr) {
+            self.cycles += CYCLES_PAGE_CROSS[opcode as usize];
         }
-        return addr;
+        addr
     }
 
-    fn absolute_y(&mut self) -> u16 {
-        let addr = self.read16(self.pc + 1) + self.y as u16;
-        if Cpu::check_same_page(addr - self.y as u16, addr) {
-            self.cycles += 1;
+    fn absolute_y(&mut self, opcode: u8) -> u16 {
+        let addr = self.read16(self.pc + 1) + u16::from(self.y);
+        if Cpu::check_same_page(addr - u16::from(self.y), addr) {
+            self.cycles += CYCLES_PAGE_CROSS[opcode as usize];
         }
-        return addr;
+        addr
     }
 
     fn immediate(&self) -> u16 {
@@ -357,7 +378,7 @@ impl Cpu {
     }
 
     fn indexed_indirect(&self) -> u16 {
-        let addr = (self.read(self.pc + 1) + self.x) as u16;
+        let addr = u16::from(self.read(self.pc + 1) + self.x);
         self.read16_wrap(addr)
     }
 
@@ -365,20 +386,20 @@ impl Cpu {
         self.read16_wrap(self.read16(self.pc + 1))
     }
 
-    fn indirect_indexed(&mut self) -> u16 {
+    fn indirect_indexed(&mut self, opcode: u8) -> u16 {
         let addr = self.read16_wrap(u16::from(self.read(self.pc + 1))) + u16::from(self.y);
         if Cpu::check_same_page(addr - u16::from(self.y), addr) {
-            self.cycles += 1;
+            self.cycles += CYCLES_PAGE_CROSS[opcode as usize];
         }
         addr
     }
 
     fn relative(&self) -> u16 {
-        let offset = self.read(self.pc + 1) as u16;
+        let offset = u16::from(self.read(self.pc + 1));
         if offset < 0x80 {
-            return self.pc + 2 + offset;
+            self.pc + 2 + offset
         } else {
-            return self.pc + 2 + offset - 0x100;
+            self.pc + 2 + offset - 0x100
         }
     }
 
@@ -397,6 +418,8 @@ impl Cpu {
     /// Executes the instruciton for the given opcode (with the given address
     /// if applicable).
     fn exec(&mut self, opcode: u8, addr: Option<u16>) {
+
+        // TODO: Could refactor into an array
         match opcode {
             0x69 => self.adc(addr.unwrap()),
             0x65 => self.adc(addr.unwrap()),
@@ -889,8 +912,8 @@ impl Cpu {
 
     /// LDA - Load Accumulator
     fn lda(&mut self, addr: u16) {
-        self.a = self.read(addr);
-        let a = self.a;
+        let a = self.read(addr);
+        self.a = a;
         self.check_negative_zero(a);
     }
 
