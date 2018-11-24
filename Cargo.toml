@@ -2,12 +2,12 @@
 name = "nes"
 version = "0.1.0"
 authors = ["Chady Kamar <chady.kamar@gmail.com>"]
+edition = "2018"
 
 [dependencies]
 bitfield = "0.13.1"
 log4rs = "0.8.1"
 log = "0.4.6"
-ndarray = "0.12.0"
 sdl2 = "0.31.0"
 
 [profile.dev]

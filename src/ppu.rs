@@ -1,7 +1,7 @@
 use bitfield::BitRange;
+use bitfield::bitfield;
 
-use mapper::Mapper;
-use ndarray::Array2;
+use crate::mapper::Mapper;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -165,7 +165,7 @@ bitfield!{
     pub vblank_started, set_vblank_started: 7;
 }
 
-pub struct Ppu<'a> {
+pub struct Ppu {
     mapper: Rc<RefCell<Box<Mapper>>>,
     scanline: usize,
     cycle: usize,
@@ -183,9 +183,9 @@ pub struct Ppu<'a> {
 
     /// Object Attribute Memory which contains a display list of up to 64
     /// sprites, where each sprite's information occupies 4 bytes.
-    primary_oam: [&'a Sprite; 64],
+    primary_oam: [Sprite; 64],
     /// Secondary OAM contains 
-    secondary_oam: Vec<(&'a Sprite, usize)>,
+    secondary_oam: Vec<(Sprite, usize)>,
 
     nt: [u8; 0x800],
 
@@ -244,8 +244,8 @@ pub struct Ppu<'a> {
     // nametable
 }
 
-impl<'a> Ppu<'a> {
-    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Ppu<'static> {
+impl Ppu {
+    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Ppu {
         Ppu {
             mapper: mapper,
             scanline: 0,
@@ -257,7 +257,7 @@ impl<'a> Ppu<'a> {
             image_palette: [0; 16],
             sprite_palette: [0; 16],
 
-            primary_oam: [&Sprite {
+            primary_oam: [Sprite {
                 y: 0,
                 tile: 0,
                 x: 0,
@@ -364,15 +364,14 @@ impl<'a> Ppu<'a> {
     fn tick(&mut self) {
         // TODO: NMI
 
-        if self.ppu_mask.show_background() || self.ppu_mask.show_sprites() {
-            if self.even && self.scanline == 261 && self.cycle == 339 {
-                self.cycle = 0;
-                self.scanline = 0;
-                self.frame += 1;
-                self.even = !self.even;
-                return;
-            }
-        }
+        if (self.ppu_mask.show_background() || self.ppu_mask.show_sprites()) 
+        && self.even && self.scanline == 261 && self.cycle == 339 {
+            self.cycle = 0;
+            self.scanline = 0;
+            self.frame += 1;
+            self.even = !self.even;
+            return;
+}
 
         self.cycle += 1;
 
@@ -410,7 +409,7 @@ impl<'a> Ppu<'a> {
                 continue;
             }
             if self.secondary_oam.len() < 8 {
-                self.secondary_oam.push((sprite, row));
+                self.secondary_oam.push((*sprite, row));
             }
             count += 1;
         }
@@ -439,7 +438,7 @@ impl<'a> Ppu<'a> {
             if color % 4 == 0 {
                 continue;
             }
-            return (i, color, Some(**sprite));
+            return (i, color, Some(*sprite));
         }
         (0, 0, None)
     }

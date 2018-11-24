@@ -1,7 +1,11 @@
+use bitfield::bitfield;
 use bitfield::BitRange;
-use controller::Controller;
 use log::Level::Debug;
-use mapper::Mapper;
+use log::{info, log_enabled};
+
+use crate::controller::Controller;
+use crate::mapper::{init, Mapper};
+use crate::ppu::Ppu;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -56,22 +60,14 @@ static INSTRUCTION_CYCLES: [usize; 256] = [
 
 /// The number of cycles used by each instruction when a page is crossed
 static CYCLES_PAGE_CROSS: [usize; 256] = [
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0,
 ];
 
 /// Name of the instruction
@@ -104,7 +100,7 @@ enum Interrupt {
     None,
 }
 
-bitfield!{
+bitfield! {
     struct ProcessorStatus(u8);
     impl Debug;
     pub get_c, set_c: 0;
@@ -118,7 +114,10 @@ bitfield!{
 
 /// The CPU struct
 pub struct Cpu {
-    pub ram: [u8; RAM_SIZE],
+    ram: [u8; RAM_SIZE],
+    // ppu: Ppu,
+    mapper: Box<Mapper>,
+    pub controller: Controller,
     cycles: usize, // Cycles remaining
     stall: usize,  // Cycles to stall the CPU for (for catch-up)
     interrupt: Interrupt,
@@ -129,13 +128,15 @@ pub struct Cpu {
     x: u8,
     y: u8,
     p: ProcessorStatus, // The status register is made up of 5 flags and 3 unused bits
-    mapper: Rc<RefCell<Box<Mapper>>>,
-    controller: Rc<RefCell<Controller>>,
 }
 
 impl Cpu {
-    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>, controller: Rc<RefCell<Controller>>) -> Cpu {
+    pub fn new(mapper: Box<Mapper>, controller: Controller) -> Cpu {
         Cpu {
+            // ppu: ppu,
+            mapper: mapper,
+            controller: controller,
+
             ram: [0; RAM_SIZE],
             cycles: 0,
             stall: 0,
@@ -146,8 +147,6 @@ impl Cpu {
             x: 0,
             y: 0,
             p: ProcessorStatus(0x24),
-            mapper: mapper,
-            controller: controller,
         }
     }
 
@@ -176,6 +175,31 @@ impl Cpu {
     pub fn trigger_irq(&mut self) {
         if self.p.get_i() {
             self.interrupt = Interrupt::IRQ;
+        }
+    }
+
+    fn read(&mut self, addr: u16) -> u8 {
+        if addr < 0x2000 {
+            self.ram[addr as usize % RAM_SIZE]
+        } else if addr < 0x4000 {
+            // self.ppu.read_register(addr)
+            unimplemented!()
+        } else if addr >= 0x6000 {
+            self.mapper.read(addr)
+        } else if addr == 0x4016 {
+            self.controller.read()
+        } else {
+            unimplemented!()
+        }
+    }
+
+    fn write(&mut self, addr: u16, val: u8) {
+        if addr < 0x2000 {
+            self.ram[(addr % 0x800) as usize] = val;
+        } else if addr >= 0x6000 {
+            self.mapper.write(addr, val);
+        } else if addr == 0x4016 {
+            self.controller.write(val);
         }
     }
 
@@ -228,41 +252,16 @@ impl Cpu {
         self.push(low);
     }
 
-    /// Reads a byte from memory
-    fn read(&self, addr: u16) -> u8 {
-        // TODO match
-        if addr < 0x2000 {
-            self.ram[(addr % 0x0800) as usize]
-        } else if addr >= 0x6000 {
-            self.mapper.borrow_mut().read(addr)
-        } else if addr == 0x4016 {
-            self.controller.borrow_mut().read()
-        } else {
-            unimplemented!()
-        }
-    }
-
-    fn read16(&self, addr: u16) -> u16 {
+    fn read16(&mut self, addr: u16) -> u16 {
         let low = u16::from(self.read(addr));
         let high = u16::from(self.read(addr + 1));
         (high << 8) | low
     }
 
-    fn read16_wrap(&self, addr: u16) -> u16 {
-        let low = self.read(addr) as u16;
-        let high = self.read((addr & 0xFF00) as u16 | (addr as u8 + 1) as u16) as u16;
+    fn read16_wrap(&mut self, addr: u16) -> u16 {
+        let low = u16::from(self.read(addr));
+        let high = u16::from(self.read((addr & 0xFF00) as u16 | u16::from(addr as u8 + 1)));
         (high << 8) | low
-    }
-
-    /// Writes a byte to memory
-    fn write(&mut self, addr: u16, val: u8) {
-        if addr < 0x2000 {
-            self.ram[(addr % 0x800) as usize] = val;
-        } else if addr >= 0x6000 {
-            self.mapper.borrow_mut().write(addr, val);
-        } else if addr == 0x4016 {
-            self.controller.borrow_mut().write(val);
-        }
     }
 
     /// Resolves the addressing mode for the given `opcode`.
@@ -317,7 +316,7 @@ impl Cpu {
     }
 
     /// Logs the current state of the CPU.
-    fn trace(&self) {
+    fn trace(&mut self) {
         let opcode = self.read(self.pc) as usize;
         let bytes = INSTRUCTION_SIZES[opcode];
         let name = INSTRUCTION_NAMES[opcode];
@@ -353,7 +352,7 @@ impl Cpu {
 
     // Addressing modes
 
-    fn absolute(&self) -> u16 {
+    fn absolute(&mut self) -> u16 {
         self.read16(self.pc + 1)
     }
 
@@ -377,24 +376,26 @@ impl Cpu {
         self.pc + 1
     }
 
-    fn indexed_indirect(&self) -> u16 {
+    fn indexed_indirect(&mut self) -> u16 {
         let addr = u16::from(self.read(self.pc + 1) + self.x);
         self.read16_wrap(addr)
     }
 
-    fn indirect(&self) -> u16 {
-        self.read16_wrap(self.read16(self.pc + 1))
+    fn indirect(&mut self) -> u16 {
+        let addr = self.read16(self.pc + 1);
+        self.read16_wrap(addr)
     }
 
     fn indirect_indexed(&mut self, opcode: u8) -> u16 {
-        let addr = self.read16_wrap(u16::from(self.read(self.pc + 1))) + u16::from(self.y);
+        let addr = self.read(self.pc + 1);
+        let addr = self.read16_wrap(u16::from(addr)) + u16::from(self.y);
         if Cpu::check_same_page(addr - u16::from(self.y), addr) {
             self.cycles += CYCLES_PAGE_CROSS[opcode as usize];
         }
         addr
     }
 
-    fn relative(&self) -> u16 {
+    fn relative(&mut self) -> u16 {
         let offset = u16::from(self.read(self.pc + 1));
         if offset < 0x80 {
             self.pc + 2 + offset
@@ -403,22 +404,21 @@ impl Cpu {
         }
     }
 
-    fn zero_page(&self) -> u16 {
-        self.read(self.pc + 1) as u16
+    fn zero_page(&mut self) -> u16 {
+        u16::from(self.read(self.pc + 1))
     }
 
-    fn zero_page_x(&self) -> u16 {
-        (self.read(self.pc + 1) + self.x) as u16 & 0xFF
+    fn zero_page_x(&mut self) -> u16 {
+        u16::from(self.read(self.pc + 1) + self.x) & 0xFF
     }
 
-    fn zero_page_y(&self) -> u16 {
-        (self.read(self.pc + 1) + self.y) as u16 & 0xFF
+    fn zero_page_y(&mut self) -> u16 {
+        u16::from(self.read(self.pc + 1) + self.y) & 0xFF
     }
 
     /// Executes the instruciton for the given opcode (with the given address
     /// if applicable).
     fn exec(&mut self, opcode: u8, addr: Option<u16>) {
-
         // TODO: Could refactor into an array
         match opcode {
             0x69 => self.adc(addr.unwrap()),
@@ -645,7 +645,7 @@ impl Cpu {
 
             0xea => {}
 
-            _ => {}
+            _ => unimplemented!(),
         }
     }
 
@@ -1114,5 +1114,87 @@ impl Cpu {
         self.a = self.y;
         let a = self.a;
         self.check_negative_zero(a);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::cell::RefCell;
+    use std::io::{BufRead, BufReader};
+    use std::path::Path;
+    use std::rc::Rc;
+    use std::fs::File;
+
+    use crate::rom::Rom;
+    use crate::mapper;
+    use super::{Controller, Cpu, Mapper};
+
+
+    #[test]
+    fn golden_log() {
+        let path = Path::new("test_roms/nestest.nes");
+        let rom = Rom::load(&mut File::open(&path).unwrap()).unwrap();
+        let mapper = mapper::init(rom);
+        let controller = Controller::default();
+        // let ppu = Ppu::new();
+        let mut cpu = Cpu::new(mapper, controller);
+
+        let file = File::open("test_roms/nestest.log").unwrap();
+        let buf_reader = BufReader::new(file);
+        for (i, line) in buf_reader.lines().enumerate() {
+            println!("{:?}", i + 1);
+            let line = line.unwrap();
+            let mut split = line.split_whitespace();
+
+            let registers = cpu.registers();
+
+            // pc
+            let mut token = split.next().unwrap();
+            let pc = u16::from_str_radix(token, 16).unwrap();
+            assert_eq!(pc, registers.0);
+
+            token = split.next().unwrap();
+            while !token.starts_with("A:") {
+                token = split.next().unwrap();
+            }
+
+            // a
+            let a = u8::from_str_radix(&token[2..], 16).unwrap();
+            assert_eq!(a, registers.2);
+
+            // x
+            token = split.next().unwrap();
+            let x = u8::from_str_radix(&token[2..], 16).unwrap();
+            assert_eq!(x, registers.3);
+
+            // y
+            token = split.next().unwrap();
+            let y = u8::from_str_radix(&token[2..], 16).unwrap();
+            assert_eq!(y, registers.4);
+
+            // p
+            token = split.next().unwrap();
+            let p = u8::from_str_radix(&token[2..], 16).unwrap();
+            assert_eq!(p, registers.5);
+
+            // sp
+            token = split.next().unwrap();
+            let sp = u8::from_str_radix(&token[3..], 16).unwrap();
+            assert_eq!(sp, registers.1);
+
+            // cyc
+            token = split.next().unwrap();
+            if token == "CYC:" {
+                token = split.next().unwrap();
+                let cycles = token.parse::<usize>().unwrap();
+                assert_eq!(cycles, registers.6);
+            } else {
+                let cycles = token[4..].parse::<usize>().unwrap();
+                assert_eq!(cycles, registers.6);
+            }
+
+            cpu.step();
+        }
     }
 }

@@ -1,4 +1,4 @@
-use bitfield::{Bit, BitRange};
+use bitfield::{Bit, BitRange, bitfield};
 
 bitfield!{
     /// Represents the statuses of the buttons. Every button is represented by
@@ -16,6 +16,7 @@ bitfield!{
 }
 
 /// The main Controller structure.
+#[derive(Default)]
 pub struct Controller {
     /// A bitfield representing the current status of the controller.
     pub buttons: Buttons,
@@ -27,15 +28,13 @@ pub struct Controller {
     strobe: u8,
 }
 
-impl Controller {
-    /// Initialize
-    pub fn new() -> Controller {
-        Controller {
-            buttons: Buttons(0),
-            index: 0,
-            strobe: 0,
-        }
+impl Default for Buttons {
+    fn default() -> Buttons {
+        Buttons(0)
     }
+}
+
+impl Controller {
 
     pub fn raw_buttons(&self) -> u8 {
         self.buttons.bit_range(7, 0)
