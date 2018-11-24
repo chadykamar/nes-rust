@@ -1,4 +1,4 @@
-use util;
+use crate::util;
 
 use std::fmt;
 use std::io::{self, Read};
@@ -32,7 +32,7 @@ pub struct Rom {
 impl Rom {
     pub fn load(r: &mut Read) -> Result<Rom, RomLoadError> {
         let mut header = [0u8; 16];
-        try!(util::read_to_buf(&mut header, r));
+        r#try!(util::read_to_buf(&mut header, r));
 
         let header = INesHeader {
             magic: [header[0], header[1], header[2], header[3]],
@@ -50,11 +50,11 @@ impl Rom {
 
         let prg_bytes = header.prg_rom_size as usize * 16384;
         let mut prg_rom = vec![0u8; prg_bytes];
-        try!(util::read_to_buf(&mut prg_rom, r));
+        r#try!(util::read_to_buf(&mut prg_rom, r));
 
         let chr_bytes = header.chr_rom_size as usize * 8192;
         let mut chr_rom = vec![0u8; chr_bytes];
-        try!(util::read_to_buf(&mut chr_rom, r));
+        r#try!(util::read_to_buf(&mut chr_rom, r));
 
         Ok(Rom {
             header: header,

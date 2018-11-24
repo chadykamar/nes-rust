@@ -1,12 +1,10 @@
-use rom::Rom;
-
+use crate::rom::Rom;
 
 pub fn init(rom: Rom) -> Box<Mapper> {
     match rom.header.mapper() {
         0 => Box::new(MapperZero::new(rom)),
         id @ _ => panic!("Unimplemented mapper {}", id),
     }
-
 }
 
 pub trait Mapper {
@@ -29,9 +27,9 @@ impl MapperZero {
 impl Mapper for MapperZero {
     fn read(&self, addr: u16) -> u8 {
         match addr {
-            0x0000...0x1FFF => return self.rom.chr[addr as usize],
-            0x6000...0x7FFF => return self.rom.sram[(addr - 0x6000) as usize],
-            0x8000...0xBFFF => return self.rom.prg[self.bank * 0x4000 + (addr - 0x8000) as usize],
+            0x0000...0x1FFF => self.rom.chr[addr as usize],
+            0x6000...0x7FFF => self.rom.sram[(addr - 0x6000) as usize],
+            0x8000...0xBFFF => self.rom.prg[self.bank * 0x4000 + (addr - 0x8000) as usize],
             a if a >= 0xC000 => {
                 return self.rom.prg
                     [(self.rom.header.prg_rom_size as usize - 1) * 0x4000 + (a - 0xC000) as usize]
