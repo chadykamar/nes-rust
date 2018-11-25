@@ -43,7 +43,7 @@ static INSTRUCTION_SIZES: [usize; 256] = [
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     2, 2, 0, 2, 2, 2, 2, 2, 1, 0, 1, 0, 3, 3, 3, 3, 2, 2, 0, 0, 2, 2, 2, 2, 1, 3, 1, 0, 0, 3, 0, 0,
     2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 0, 3, 3, 3, 3,
-    2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
     2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 2, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
 ];
 
@@ -657,6 +657,9 @@ impl Cpu {
             // SBC
             0xEB => self.sbc(addr.unwrap()),
 
+            // DCP
+            0xC7 | 0xD7 | 0xCF | 0xDF | 0xDB | 0xC3 | 0xD3 => self.dcp(addr.unwrap()),
+
             _ => unimplemented!(),
         }
     }
@@ -1143,6 +1146,12 @@ impl Cpu {
         let val = self.a & self.x;
         self.write(addr, val);
         // self.check_negative_zero(val);
+    }
+
+    /// DCP - Subtract one from memory
+    fn dcp(&mut self, addr: u16) {
+        self.dec(addr);
+        self.compare(addr, self.a);
     }
 }
 
