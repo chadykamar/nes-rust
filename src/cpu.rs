@@ -42,7 +42,7 @@ static INSTRUCTION_SIZES: [usize; 256] = [
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     2, 2, 0, 0, 2, 2, 2, 0, 1, 0, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 0, 3, 0, 0,
-    2, 2, 2, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+    2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 0, 3, 3, 3, 3,
     2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
 ];
@@ -645,6 +645,20 @@ impl Cpu {
 
             0xea => {}
 
+            // Illegal opcodes
+
+            // NOP
+            0x1a | 0x3a | 0x5a | 0x7a | 0xda | 0xfa => {}
+            // Double NOP
+            0x04 | 0x14 | 0x34 | 0x44 | 0x54 | 0x64 | 0x74 | 0x80 | 0x82 | 0x89 | 0xc2 | 0xd4
+            | 0xe2 | 0xf4 => {}
+            // Triple NOP
+            0x0c | 0x1c | 0x3c | 0x5c | 0x7c | 0xdc | 0xfc => {},
+
+            // LAX
+            0xa7 | 0xb7 | 0xaf | 0xbf | 0xa3 | 0xb3 => self.lax(addr.unwrap()),
+
+
             _ => unimplemented!(),
         }
     }
@@ -919,16 +933,16 @@ impl Cpu {
 
     /// LDX - Load X Register
     fn ldx(&mut self, addr: u16) {
-        self.x = self.read(addr);
-        let x = self.x;
-        self.check_negative_zero(x);
+        let m = self.read(addr);
+        self.x = m;
+        self.check_negative_zero(m);
     }
 
     /// LDY - Load Y Register
     fn ldy(&mut self, addr: u16) {
-        self.y = self.read(addr);
-        let y = self.y;
-        self.check_negative_zero(y);
+        let m = self.read(addr);
+        self.y = m;
+        self.check_negative_zero(m);
     }
 
     /// LSR - Logical Shift Right (Accumulator)
@@ -1115,21 +1129,33 @@ impl Cpu {
         let a = self.a;
         self.check_negative_zero(a);
     }
+
+    // Illegal ops
+
+    // LAX - Load Accumulator and X Register with Memory
+    fn lax(&mut self, addr: u16) {
+        let m = self.read(addr);
+        self.a = m;
+        self.x = m;
+        self.check_negative_zero(m);
+
+
+    }
+
 }
 
 #[cfg(test)]
 mod tests {
 
     use std::cell::RefCell;
+    use std::fs::File;
     use std::io::{BufRead, BufReader};
     use std::path::Path;
     use std::rc::Rc;
-    use std::fs::File;
 
-    use crate::rom::Rom;
-    use crate::mapper;
     use super::{Controller, Cpu, Mapper};
-
+    use crate::mapper;
+    use crate::rom::Rom;
 
     #[test]
     fn golden_log() {
