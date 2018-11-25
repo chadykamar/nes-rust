@@ -41,10 +41,10 @@ static INSTRUCTION_SIZES: [usize; 256] = [
     3, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 1, 0, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 0, 3, 0, 0,
+    2, 2, 0, 2, 2, 2, 2, 2, 1, 0, 1, 0, 3, 3, 3, 3, 2, 2, 0, 0, 2, 2, 2, 2, 1, 3, 1, 0, 0, 3, 0, 0,
     2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 0, 3, 3, 3, 3,
     2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
-    2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 2, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
 ];
 
 static INSTRUCTION_CYCLES: [usize; 256] = [
@@ -430,14 +430,7 @@ impl Cpu {
             0x61 => self.adc(addr.unwrap()),
             0x71 => self.adc(addr.unwrap()),
 
-            0xE9 => self.sbc(addr.unwrap()),
-            0xE5 => self.sbc(addr.unwrap()),
-            0xF5 => self.sbc(addr.unwrap()),
-            0xED => self.sbc(addr.unwrap()),
-            0xFD => self.sbc(addr.unwrap()),
-            0xF9 => self.sbc(addr.unwrap()),
-            0xE1 => self.sbc(addr.unwrap()),
-            0xF1 => self.sbc(addr.unwrap()),
+            0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(addr.unwrap()),
 
             0xa1 => self.lda(addr.unwrap()),
             0xa5 => self.lda(addr.unwrap()),
@@ -653,11 +646,16 @@ impl Cpu {
             0x04 | 0x14 | 0x34 | 0x44 | 0x54 | 0x64 | 0x74 | 0x80 | 0x82 | 0x89 | 0xc2 | 0xd4
             | 0xe2 | 0xf4 => {}
             // Triple NOP
-            0x0c | 0x1c | 0x3c | 0x5c | 0x7c | 0xdc | 0xfc => {},
+            0x0c | 0x1c | 0x3c | 0x5c | 0x7c | 0xdc | 0xfc => {}
 
             // LAX
             0xa7 | 0xb7 | 0xaf | 0xbf | 0xa3 | 0xb3 => self.lax(addr.unwrap()),
 
+            // SAX
+            0x87 | 0x97 | 0x83 | 0x8F => self.sax(addr.unwrap()),
+
+            // SBC
+            0xEB => self.sbc(addr.unwrap()),
 
             _ => unimplemented!(),
         }
@@ -1123,7 +1121,7 @@ impl Cpu {
         self.sp = self.x;
     }
 
-    // TYA - Transfer Y to Accumulator
+    /// TYA - Transfer Y to Accumulator
     fn tya(&mut self) {
         self.a = self.y;
         let a = self.a;
@@ -1132,16 +1130,20 @@ impl Cpu {
 
     // Illegal ops
 
-    // LAX - Load Accumulator and X Register with Memory
+    /// LAX - Load Accumulator and X Register with Memory
     fn lax(&mut self, addr: u16) {
         let m = self.read(addr);
         self.a = m;
         self.x = m;
         self.check_negative_zero(m);
-
-
     }
 
+    /// SAX - Store Accumulator AND X Register in Memory
+    fn sax(&mut self, addr: u16) {
+        let val = self.a & self.x;
+        self.write(addr, val);
+        // self.check_negative_zero(val);
+    }
 }
 
 #[cfg(test)]
