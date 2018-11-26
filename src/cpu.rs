@@ -37,14 +37,14 @@ static INSTRUCTION_MODES: [usize; 256] = [
 
 /// The number of bytes of each instruction in bytes
 static INSTRUCTION_SIZES: [usize; 256] = [
-    1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+    1, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
     3, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     2, 2, 0, 2, 2, 2, 2, 2, 1, 0, 1, 0, 3, 3, 3, 3, 2, 2, 0, 0, 2, 2, 2, 2, 1, 3, 1, 0, 0, 3, 0, 0,
     2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 0, 3, 3, 3, 3,
     2, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
-    2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 2, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+    2, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
 ];
 
 static INSTRUCTION_CYCLES: [usize; 256] = [
@@ -469,94 +469,28 @@ impl Cpu {
             0x94 => self.sty(addr.unwrap()),
             0x8c => self.sty(addr.unwrap()),
 
-            0xc9 => {
-                let a = self.a;
-                self.compare(addr.unwrap(), a);
-            }
-            0xc5 => {
-                let a = self.a;
-                self.compare(addr.unwrap(), a);
-            }
-            0xd5 => {
-                let a = self.a;
-                self.compare(addr.unwrap(), a);
-            }
-            0xcd => {
-                let a = self.a;
-                self.compare(addr.unwrap(), a);
-            }
-            0xdd => {
-                let a = self.a;
-                self.compare(addr.unwrap(), a);
-            }
-            0xd9 => {
-                let a = self.a;
-                self.compare(addr.unwrap(), a);
-            }
-            0xc1 => {
-                let a = self.a;
-                self.compare(addr.unwrap(), a);
-            }
-            0xd1 => {
+            0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => {
                 let a = self.a;
                 self.compare(addr.unwrap(), a);
             }
 
-            0xe0 => {
-                let x = self.x;
-                self.compare(addr.unwrap(), x);
-            }
-            0xe4 => {
-                let x = self.x;
-                self.compare(addr.unwrap(), x);
-            }
-            0xec => {
+            0xe0 | 0xe4 | 0xec => {
                 let x = self.x;
                 self.compare(addr.unwrap(), x);
             }
 
-            0xc0 => {
-                let y = self.y;
-                self.compare(addr.unwrap(), y);
-            }
-            0xc4 => {
-                let y = self.y;
-                self.compare(addr.unwrap(), y);
-            }
-            0xcc => {
+            0xc0 | 0xC4 | 0xCC => {
                 let y = self.y;
                 self.compare(addr.unwrap(), y);
             }
 
-            0x29 => self.and(addr.unwrap()),
-            0x25 => self.and(addr.unwrap()),
-            0x35 => self.and(addr.unwrap()),
-            0x2d => self.and(addr.unwrap()),
-            0x3d => self.and(addr.unwrap()),
-            0x39 => self.and(addr.unwrap()),
-            0x21 => self.and(addr.unwrap()),
-            0x31 => self.and(addr.unwrap()),
+            0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(addr.unwrap()),
 
-            0x09 => self.ora(addr.unwrap()),
-            0x05 => self.ora(addr.unwrap()),
-            0x15 => self.ora(addr.unwrap()),
-            0x0d => self.ora(addr.unwrap()),
-            0x1d => self.ora(addr.unwrap()),
-            0x19 => self.ora(addr.unwrap()),
-            0x01 => self.ora(addr.unwrap()),
-            0x11 => self.ora(addr.unwrap()),
+            0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(addr.unwrap()),
 
-            0x49 => self.eor(addr.unwrap()),
-            0x45 => self.eor(addr.unwrap()),
-            0x55 => self.eor(addr.unwrap()),
-            0x4d => self.eor(addr.unwrap()),
-            0x5d => self.eor(addr.unwrap()),
-            0x59 => self.eor(addr.unwrap()),
-            0x41 => self.eor(addr.unwrap()),
-            0x51 => self.eor(addr.unwrap()),
+            0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(addr.unwrap()),
 
-            0x24 => self.bit(addr.unwrap()),
-            0x2c => self.bit(addr.unwrap()),
+            0x24 | 0x2C => self.bit(addr.unwrap()),
 
             // Shifts and rotates
             0x2a => self.rol_a(),
@@ -659,6 +593,12 @@ impl Cpu {
 
             // DCP
             0xC7 | 0xD7 | 0xCF | 0xDF | 0xDB | 0xC3 | 0xD3 => self.dcp(addr.unwrap()),
+
+            // ISC
+            0xE7 | 0xF7 | 0xEF | 0xFF | 0xFB | 0xE3 | 0xF3 => self.isc(addr.unwrap()),
+
+            // SLO
+            0x07 | 0x17 | 0x0F | 0x1F | 0x1B | 0x03 | 0x13 => self.slo(addr.unwrap()),
 
             _ => unimplemented!(),
         }
@@ -1141,17 +1081,34 @@ impl Cpu {
         self.check_negative_zero(m);
     }
 
-    /// SAX - Store Accumulator AND X Register in Memory
+    /// SAX - Store Accumulator AND X Register
     fn sax(&mut self, addr: u16) {
         let val = self.a & self.x;
         self.write(addr, val);
         // self.check_negative_zero(val);
     }
 
-    /// DCP - Subtract one from memory
+    /// DCP - Decrement and Compare (with accumulator)
     fn dcp(&mut self, addr: u16) {
         self.dec(addr);
         self.compare(addr, self.a);
+    }
+
+    /// ISC - Increment And Subtract (from accumulator) with Carry
+    fn isc(&mut self, addr: u16) {
+        self.inc(addr);
+        self.sbc(addr);
+    }
+
+    /// SLO - Shift Left and OR
+    fn slo(&mut self, addr: u16) {
+        let m = self.read(addr);
+        self.p.set_c((m >> 7) & 1 == 1);
+        let val = m << 1;
+        self.a |= val;
+        self.check_negative_zero(self.a);
+        self.write(addr, val);
+        
     }
 }
 
