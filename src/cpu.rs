@@ -38,7 +38,7 @@ static INSTRUCTION_MODES: [usize; 256] = [
 /// The number of bytes of each instruction in bytes
 static INSTRUCTION_SIZES: [usize; 256] = [
     1, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
-    3, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+    3, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     2, 2, 0, 2, 2, 2, 2, 2, 1, 0, 1, 0, 3, 3, 3, 3, 2, 2, 0, 0, 2, 2, 2, 2, 1, 3, 1, 0, 0, 3, 0, 0,
@@ -600,6 +600,9 @@ impl Cpu {
             // SLO
             0x07 | 0x17 | 0x0F | 0x1F | 0x1B | 0x03 | 0x13 => self.slo(addr.unwrap()),
 
+            // RLA
+            0x27 | 0x37 | 0x2F | 0x3F | 0x3B | 0x23 | 0x33 => self.rla(addr.unwrap()),
+
             _ => unimplemented!(),
         }
     }
@@ -1100,7 +1103,7 @@ impl Cpu {
         self.sbc(addr);
     }
 
-    /// SLO - Shift Left and OR
+    /// SLO - Shift Left and OR (with accumulator)
     fn slo(&mut self, addr: u16) {
         let m = self.read(addr);
         self.p.set_c((m >> 7) & 1 == 1);
@@ -1108,7 +1111,17 @@ impl Cpu {
         self.a |= val;
         self.check_negative_zero(self.a);
         self.write(addr, val);
-        
+    }
+
+    /// RLA - Rotate Left then AND (with accumulator)
+    fn rla(&mut self, addr: u16) {
+        let c = self.p.get_c() as u8;
+        let m = self.read(addr);
+        self.p.set_c((m >> 7) & 1 == 1);
+        let val = (m << 1) | c;
+        self.a &= val;
+        self.check_negative_zero(self.a);
+        self.write(addr, val);
     }
 }
 
