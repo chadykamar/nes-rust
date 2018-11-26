@@ -39,7 +39,7 @@ static INSTRUCTION_MODES: [usize; 256] = [
 static INSTRUCTION_SIZES: [usize; 256] = [
     1, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
     3, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
-    1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
+    1, 2, 0, 2, 2, 2, 2, 2, 1, 2, 1, 0, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 3, 3, 3, 3, 3,
     1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0,
     2, 2, 0, 2, 2, 2, 2, 2, 1, 0, 1, 0, 3, 3, 3, 3, 2, 2, 0, 0, 2, 2, 2, 2, 1, 3, 1, 0, 0, 3, 0, 0,
     2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 2, 3, 3, 3, 3, 2, 2, 0, 2, 2, 2, 2, 2, 1, 3, 1, 0, 3, 3, 3, 3,
@@ -603,6 +603,9 @@ impl Cpu {
             // RLA
             0x27 | 0x37 | 0x2F | 0x3F | 0x3B | 0x23 | 0x33 => self.rla(addr.unwrap()),
 
+            // SRE
+            0x47 | 0x57 | 0x4F | 0x5F | 0x5B | 0x43 | 0x53 => self.sre(addr.unwrap()),
+
             _ => unimplemented!(),
         }
     }
@@ -1120,6 +1123,16 @@ impl Cpu {
         self.p.set_c((m >> 7) & 1 == 1);
         let val = (m << 1) | c;
         self.a &= val;
+        self.check_negative_zero(self.a);
+        self.write(addr, val);
+    }
+
+    /// SRE - Shift Right then EOR (XOR) (with accumulator)
+    fn sre(&mut self, addr: u16) {
+        let m = self.read(addr);
+        self.p.set_c(m & 1 == 1);
+        let val = m >> 1;
+        self.a ^= val;
         self.check_negative_zero(self.a);
         self.write(addr, val);
     }
