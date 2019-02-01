@@ -8,7 +8,7 @@ edition = "2018"
 bitfield = "0.13.1"
 log4rs = "0.8.1"
 log = "0.4.6"
-sdl2 = "0.31.0"
+sdl2 = "0.32.1"
 
 [profile.dev]
 overflow-checks = false
