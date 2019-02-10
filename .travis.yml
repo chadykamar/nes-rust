@@ -1,6 +1,6 @@
 language: rust
 cache: cargo
 rust:
-    - nightly
+    - stable 
 before_install:
     - sudo apt-get install libsdl2-dev
