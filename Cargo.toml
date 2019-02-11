@@ -4,6 +4,14 @@ version = "0.1.0"
 authors = ["Chady Kamar <chady.kamar@gmail.com>"]
 edition = "2018"
 
+[lib]
+name = "nes"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nes_bin"
+path = "src/main.rs"
+
 [dependencies]
 bitfield = "0.13.1"
 log4rs = "0.8.1"
