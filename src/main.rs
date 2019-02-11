@@ -1,4 +1,6 @@
-use rom::Rom;
+
+use nes::rom::Rom;
+use nes::start;
 
 use std::env;
 use std::fs::File;
