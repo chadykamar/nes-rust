@@ -1,38 +1,42 @@
+use crate::controller::Controller;
+use crate::mapper::Mapper;
+use crate::ppu::Ppu;
 
-use controller::Controller;
-use mapper::Mapper;
-use ppu::Ppu;
+use std::cell::RefCell;
+use std::rc::Rc;
 
-/// Ram Size
-const RAM_SIZE: usize = 0x800;
+
 
 /// Connects all the NES components
 pub struct Bus {
     ram: [u8; RAM_SIZE],
-    mapper: Box<Mapper>,
+    mapper: Rc<RefCell<Box<Mapper>>>,
     pub controller: Controller,
-    ppu: Ppu,
+    ppu: Rc<RefCell<Ppu>>,
 }
 
 impl Bus {
-
-    pub fn new(mapper: Box<Mapper>, controller:Controller, ppu: Ppu) -> Bus {
-        Bus{
+    pub fn new(
+        mapper: Rc<RefCell<Box<Mapper>>>,
+        controller: Controller,
+        ppu: Rc<RefCell<Ppu>>,
+    ) -> Bus {
+        Bus {
             ram: [0; RAM_SIZE],
             mapper: mapper,
             controller: controller,
-            ppu: ppu
+            ppu: ppu,
         }
     }
 
     /// Implements the CPU's memory map
-    pub fn read(&self, addr: u16) -> u8 {
+    pub fn read(&mut self, addr: u16) -> u8 {
         if addr < 0x2000 {
             self.ram[addr as usize % RAM_SIZE]
         } else if addr < 0x4000 {
-            self.ppu.read_register(addr)
+            self.ppu.borrow_mut().read_register(addr)
         } else if addr >= 0x6000 {
-            self.mapper.read(addr)
+            self.mapper.borrow().read(addr)
         } else if addr == 0x4016 {
             self.controller.read()
         } else {
@@ -45,7 +49,7 @@ impl Bus {
         if addr < 0x2000 {
             self.ram[(addr % 0x800) as usize] = val;
         } else if addr >= 0x6000 {
-            self.mapper.write(addr, val);
+            self.mapper.borrow_mut().write(addr, val);
         } else if addr == 0x4016 {
             self.controller.write(val);
         }
