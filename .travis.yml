@@ -2,5 +2,11 @@ language: rust
 cache: cargo
 rust:
   - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: beta
+    - rust: nightly
 before_install:
   - sudo apt-get install libsdl2-dev
