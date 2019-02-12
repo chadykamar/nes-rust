@@ -1,3 +1,4 @@
+extern crate nes;
 
 use nes::rom::Rom;
 use nes::start;

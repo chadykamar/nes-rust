@@ -7,7 +7,7 @@ use log4rs::encode::pattern::PatternEncoder;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::pixels::PixelFormatEnum;
+use sdl2::pixels::{Color, PixelFormatEnum};
 
 pub mod controller;
 pub mod cpu;
@@ -20,6 +20,7 @@ pub mod util;
 
 use crate::controller::Controller;
 use crate::cpu::Cpu;
+use crate::mapper::{Mapper, MapperZero};
 use crate::ppu::Ppu;
 use crate::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::rom::Rom;
@@ -62,13 +63,11 @@ pub fn start(rom: Rom) {
     println!("Loaded ROM: {}", rom.header);
 
     let mapper = mapper::init(rom);
-    let mut mapper = Rc::new(RefCell::new(mapper));
-
-    let mut ppu = Ppu::new(mapper.clone());
-    let mut ppu = Rc::new(RefCell::new(ppu));
+    // let mut ppu = Ppu::new();
+    // let mut ppu = Rc::new(RefCell::new(ppu));
     let controller = Controller::default();
 
-    let mut cpu = Cpu::new(mapper.clone(), controller, ppu.clone());
+    let mut cpu = Cpu::new(mapper, controller);
 
     cpu.reset();
 

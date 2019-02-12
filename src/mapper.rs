@@ -31,7 +31,7 @@ impl Mapper for MapperZero {
             0x6000...0x7FFF => self.rom.sram[(addr - 0x6000) as usize],
             0x8000...0xBFFF => self.rom.prg[self.bank * 0x4000 + (addr - 0x8000) as usize],
             a if a >= 0xC000 => {
-                self.rom.prg
+                return self.rom.prg
                     [(self.rom.header.prg_rom_size as usize - 1) * 0x4000 + (a - 0xC000) as usize]
             }
             _ => panic!("NO!"),
