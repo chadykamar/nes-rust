@@ -1166,7 +1166,7 @@ mod tests {
     use crate::mapper;
     use crate::rom::Rom;
 
-    #[test]
+
     fn golden_log() {
         let path = Path::new("test_roms/nestest.nes");
         let rom = Rom::load(&mut File::open(&path).unwrap()).unwrap();
