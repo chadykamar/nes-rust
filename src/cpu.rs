@@ -114,10 +114,9 @@ bitfield! {
 
 /// The CPU struct
 pub struct Cpu {
-    
     ram: [u8; RAM_SIZE],
-    ppu: Rc<RefCell<Ppu>>,
-    mapper: Rc<RefCell<Box<Mapper>>>,
+    // ppu: Ppu,
+    mapper: Box<Mapper>,
     pub controller: Controller,
     cycles: usize, // Cycles remaining
     stall: usize,  // Cycles to stall the CPU for (for catch-up)
@@ -132,9 +131,9 @@ pub struct Cpu {
 }
 
 impl Cpu {
-    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>, controller: Controller, ppu: Rc<RefCell<Ppu>>) -> Cpu {
+    pub fn new(mapper: Box<Mapper>, controller: Controller) -> Cpu {
         Cpu {
-            ppu: ppu,
+            // ppu: ppu,
             mapper: mapper,
             controller: controller,
 
@@ -183,10 +182,10 @@ impl Cpu {
         if addr < 0x2000 {
             self.ram[addr as usize % RAM_SIZE]
         } else if addr < 0x4000 {
-            self.ppu.borrow_mut().read_register(addr)
-            // unimplemented!()
+            // self.ppu.read_register(addr)
+            unimplemented!()
         } else if addr >= 0x6000 {
-            self.mapper.borrow_mut().read(addr)
+            self.mapper.read(addr)
         } else if addr == 0x4016 {
             self.controller.read()
         } else {
@@ -198,7 +197,7 @@ impl Cpu {
         if addr < 0x2000 {
             self.ram[(addr % 0x800) as usize] = val;
         } else if addr >= 0x6000 {
-            self.mapper.borrow_mut().write(addr, val);
+            self.mapper.write(addr, val);
         } else if addr == 0x4016 {
             self.controller.write(val);
         }
@@ -1162,7 +1161,7 @@ mod tests {
     use std::path::Path;
     use std::rc::Rc;
 
-    use super::{Controller, Cpu, Mapper, Ppu};
+    use super::{Controller, Cpu, Mapper};
     use crate::mapper;
     use crate::rom::Rom;
 
@@ -1171,10 +1170,9 @@ mod tests {
         let path = Path::new("test_roms/nestest.nes");
         let rom = Rom::load(&mut File::open(&path).unwrap()).unwrap();
         let mapper = mapper::init(rom);
-        let mut mapper = Rc::new(RefCell::new(mapper));
         let controller = Controller::default();
-        let ppu = Rc::new(RefCell::new(Ppu::new(mapper.clone())));
-        let mut cpu = Cpu::new(mapper.clone(), controller, ppu);
+        // let ppu = Ppu::new();
+        let mut cpu = Cpu::new(mapper, controller);
 
         let file = File::open("test_roms/nestest.log").unwrap();
         let buf_reader = BufReader::new(file);
