@@ -1,4 +1,7 @@
-use rom::Rom;
+extern crate nes;
+
+use nes::rom::Rom;
+use nes::start;
 
 use std::env;
 use std::fs::File;
