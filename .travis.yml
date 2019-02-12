@@ -9,4 +9,4 @@ matrix:
       - rust: beta
       - rust: nightly
 before_install:
-    - sudo apt-get update && sudo apt-get build-dep libsdl2-dev
+    - sudo apt-get build-dep libsdl2-dev
