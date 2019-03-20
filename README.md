@@ -2,5 +2,5 @@
 
 This is a work in progress.
 
-Currently implemented:
+# Currently implemented
 * Cycle-accurate CPU.
