@@ -1,5 +1,3 @@
-
-
 use log::LevelFilter;
 use log4rs::append::file::FileAppender;
 use log4rs::config::{Appender, Config, Root};
@@ -77,6 +75,7 @@ pub fn start(rom: Rom) {
 
     let video_subsystem = sdl_context.video().unwrap();
 
+    // TODO Add sound
     // let audio_subsystem = sdl_context.audio().unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -101,7 +100,8 @@ pub fn start(rom: Rom) {
             PixelFormatEnum::RGB24,
             SCREEN_WIDTH as u32,
             SCREEN_HEIGHT as u32,
-        ).unwrap();
+        )
+        .unwrap();
 
     'running: loop {
         for event in event_pump.poll_iter() {
@@ -145,13 +145,13 @@ pub fn start(rom: Rom) {
         canvas.present();
         let cpu_cycles = cpu.step();
 
-        // for _ in 0..cpu_cycles {
-        //     ppu.borrow_mut().step();
-        // }
-
-        // texture
-        //     .update(None, &ppu.borrow_mut().screen, SCREEN_WIDTH as usize * 3)
-        //     .unwrap();
+        texture
+            .update(
+                None,
+                &ppu.borrow().screen[..],
+                SCREEN_HEIGHT * SCREEN_WIDTH * 3,
+            )
+            .unwrap();
         canvas.clear();
         canvas.copy(&texture, None, None).unwrap();
         canvas.present();
