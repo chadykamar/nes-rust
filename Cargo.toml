@@ -16,7 +16,7 @@ path = "src/main.rs"
 bitfield = "0.13.1"
 log4rs = "0.8.1"
 log = "0.4.6"
-sdl2 = "0.32.1"
+sdl2 = "0.34.4"
 
 [profile.dev]
 overflow-checks = false
