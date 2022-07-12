@@ -13,7 +13,7 @@ name = "nes_bin"
 path = "src/main.rs"
 
 [dependencies]
-bitfield = "0.13.1"
+bitfield = "0.14.0"
 log4rs = "0.8.1"
 log = "0.4.6"
 sdl2 = "0.32.1"
